@@ -126,7 +126,8 @@ fn flush_batch(
 
             for (data_len, client) in clients {
                 let client_data: Vec<_> = result_iterator.by_ref().take(data_len).collect();
-                client.send(Ok(client_data)).expect("Could not send data");
+                // TODO: replace expect with logging
+                client.send(Ok(client_data)).expect("Could not send data!");
             }
         }
     });
