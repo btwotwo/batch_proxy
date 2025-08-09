@@ -2,7 +2,6 @@ mod batch;
 mod request;
 mod api_client;
 
-use tokio::sync::{self, mpsc, oneshot};
 
 
 #[derive(Debug, PartialEq, Eq, Hash)]
