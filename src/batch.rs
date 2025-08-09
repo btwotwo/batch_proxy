@@ -1,14 +1,15 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use actix_web::mime::TEXT_JAVASCRIPT;
-use tokio::sync::{mpsc, oneshot};
+use log::error;
+use tokio::sync::mpsc;
 
 use crate::{
-    api_client::{self, ApiClient, EmbedApiRequest},
-    request::{self, EmbedRequestParams, EmbedRequestHandle},
+    api_client::{ApiClient, EmbedApiRequest},
+    request::{EmbedRequestHandle, EmbedRequestParams},
 };
 
 const MAX_BATCHED_COUNT: usize = 4;
+const MAX_WAITING_TIME: std::time::Duration = Duration::from_secs(10);
 
 enum BatchMessage {
     NewRequest(EmbedRequestHandle),
@@ -58,6 +59,7 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchTask<TApiClient> {
         let mut task = Self::new(rx, api_client, api_parameters);
 
         tokio::spawn(async move {
+            // tokio::select! {}
             while let Some(msg) = task.receiver.recv().await {
                 task.handle_message(msg);
             }
@@ -85,7 +87,7 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchTask<TApiClient> {
                 requests,
                 Arc::clone(&self.api_parameters),
                 Arc::clone(&self.api_client),
-                current_batch_size
+                current_batch_size,
             );
         }
 
@@ -94,12 +96,11 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchTask<TApiClient> {
     }
 }
 
-
 fn flush_batch(
     requests: Vec<EmbedRequestHandle>,
     request_parameters: Arc<EmbedRequestParams>,
     api_client: Arc<impl ApiClient + 'static>,
-    current_batch_size: usize
+    current_batch_size: usize,
 ) {
     tokio::spawn(async move {
         let mut inputs = Vec::with_capacity(current_batch_size);
@@ -111,7 +112,7 @@ fn flush_batch(
             inputs.extend(request.request_data);
             clients.push((input_len, reply_handle));
         }
-        
+
         let api_parameters = EmbedApiRequest {
             inputs,
             truncate: request_parameters.truncate,
@@ -127,7 +128,9 @@ fn flush_batch(
             for (data_len, client) in clients {
                 let client_data: Vec<_> = result_iterator.by_ref().take(data_len).collect();
                 // TODO: replace expect with logging
-                client.send(Ok(client_data)).expect("Could not send data!");
+                client
+                    .send(Ok(client_data))
+                    .unwrap_or_else(|_| error!("Could not send response to client, receiver has dropped. [ClientId = TODO]"));
             }
         }
     });
