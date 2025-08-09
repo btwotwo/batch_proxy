@@ -1,17 +1,7 @@
+mod api_client;
 mod batch;
 mod request;
-mod api_client;
-
-
-
-#[derive(Debug, PartialEq, Eq, Hash)]
-struct ParameterSet {
-    normalize: Option<bool>,
-    prompt_name: Option<String>,
-    truncate: Option<bool>,
-    truncation_direction: Option<String>
-}
-
+mod config;
 
 fn main() {
     println!("Hello, world!");

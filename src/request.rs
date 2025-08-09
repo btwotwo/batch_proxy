@@ -1,6 +1,10 @@
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+pub trait Request {
+    fn data_count(&self) -> usize;
+}
+
 /// This struct represents request parameters that are used to batch similar requests together
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct EmbedRequestParams {
@@ -14,6 +18,11 @@ pub struct EmbedRequestParams {
 pub struct EmbedRequestHandle {
     pub reply_handle: oneshot::Sender<anyhow::Result<Vec<Vec<f64>>>>,
     pub request_data: Vec<String>,
-    pub request_id: Uuid
+    pub request_id: Uuid,
 }
 
+impl Request for EmbedRequestHandle {
+    fn data_count(&self) -> usize {
+        self.request_data.len()
+    }
+}
