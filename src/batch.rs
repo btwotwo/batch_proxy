@@ -59,9 +59,16 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchTask<TApiClient> {
         let mut task = Self::new(rx, api_client, api_parameters);
 
         tokio::spawn(async move {
-            // tokio::select! {}
-            while let Some(msg) = task.receiver.recv().await {
-                task.handle_message(msg);
+            loop {
+                tokio::select! {
+                    Some(msg) = task.receiver.recv() => {
+                        task.handle_message(msg);
+                    },
+                    _ = tokio::time::sleep(MAX_WAITING_TIME) => {
+                        task.flush_batch();
+                    },
+                    else => break,
+                }
             }
         });
 
@@ -75,28 +82,36 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchTask<TApiClient> {
         todo!()
     }
 
+    fn flush_batch(&mut self) {
+        if self.pending_requests.is_empty() {
+            return;
+        }
+
+        let requests = std::mem::take(&mut self.pending_requests);
+        let current_batch_size = std::mem::take(&mut self.current_batch_size);
+
+
+        execute_request(
+            requests,
+            Arc::clone(&self.api_parameters),
+            Arc::clone(&self.api_client),
+            current_batch_size,
+        );
+    }
+
     // Message handlers
     fn handle_new_request(&mut self, req: EmbedRequestHandle) {
         let data_len = req.request_data.len();
 
         // TODO: Replace with config
-        if self.current_batch_size + data_len >= MAX_BATCHED_COUNT {
-            let requests = std::mem::take(&mut self.pending_requests);
-            let current_batch_size = std::mem::take(&mut self.current_batch_size);
-            flush_batch(
-                requests,
-                Arc::clone(&self.api_parameters),
-                Arc::clone(&self.api_client),
-                current_batch_size,
-            );
-        }
+        if self.current_batch_size + data_len >= MAX_BATCHED_COUNT {}
 
         self.current_batch_size += data_len;
         self.pending_requests.push(req);
     }
 }
 
-fn flush_batch(
+fn execute_request(
     requests: Vec<EmbedRequestHandle>,
     request_parameters: Arc<EmbedRequestParams>,
     api_client: Arc<impl ApiClient + 'static>,
@@ -128,10 +143,15 @@ fn flush_batch(
             for (data_len, client) in clients {
                 let client_data: Vec<_> = result_iterator.by_ref().take(data_len).collect();
                 // TODO: replace expect with logging
-                client
-                    .send(Ok(client_data))
-                    .unwrap_or_else(|_| error!("Could not send response to client, receiver has dropped. [ClientId = TODO]"));
+                client.send(Ok(client_data)).unwrap_or_else(|_| {
+                    error!(
+                        "Could not send response to client, receiver has dropped. [ClientId = TODO]"
+                    )
+                });
             }
         }
     });
 }
+
+#[cfg(test)]
+mod tests {}
