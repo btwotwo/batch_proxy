@@ -4,13 +4,13 @@ use anyhow::anyhow;
 use log::error;
 
 use crate::{
-    api_client::{ApiClient, EmbedApiRequest},
-    request::{EmbedRequestHandle, EmbedRequestParams},
+    api_client::{ApiClient, EmbedApiRequest, EmbedApiRequestInputs},
+    request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
 pub fn execute_request(
-    requests: Vec<EmbedRequestHandle>,
-    request_parameters: Arc<EmbedRequestParams>,
+    requests: Vec<EmbedRequestClient>,
+    request_parameters: Arc<EmbedRequestGroupingParams>,
     api_client: Arc<impl ApiClient + 'static>,
     current_batch_size: usize,
 ) {
@@ -26,9 +26,9 @@ pub fn execute_request(
         }
 
         let api_parameters = EmbedApiRequest {
-            inputs,
+            inputs: EmbedApiRequestInputs::Vec(inputs),
             truncate: request_parameters.truncate,
-            normalize: request_parameters.normalize.unwrap_or(false),
+            normalize: request_parameters.normalize,
             dimensions: request_parameters.dimensions,
             prompt_name: request_parameters.prompt_name.clone(),
             truncation_direction: request_parameters.truncation_direction.clone(),
@@ -41,22 +41,14 @@ pub fn execute_request(
                 for (data_len, client) in clients {
                     let client_data: Vec<_> = result_iterator.by_ref().take(data_len).collect();
 
-                    client.send(Ok(client_data)).unwrap_or_else(|_| {
-                        error!(
-                            "Could not send response to client, receiver has dropped. [ClientId = TODO]"
-                        )
-                    });
+                    client.reply_with_result(client_data);
                 }
             }
 
             Err(err) => {
                 error!("Embedding API call failed. Error = {0}", &err);
                 for (_, client) in clients {
-                    client.send(Err(anyhow!("API Call failed."))).unwrap_or_else(|_| {
-                        error!(
-                            "Could not send response to client, receiver has dropped. [ClientId = TODO]"
-                        )
-                    });
+                    client.reply_with_error(anyhow!("API call failed. Please try again"));
                 }
             }
         }
