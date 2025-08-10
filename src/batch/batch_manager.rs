@@ -43,7 +43,7 @@ impl BatchManagerHandle {
 
         let client_id = Uuid::new_v4();
         info!(
-            "Processing request from client. [input = {:?}, params = {:?}, client_id = {:?}]",
+            "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",
             request_data, request_params, client_id
         );
 

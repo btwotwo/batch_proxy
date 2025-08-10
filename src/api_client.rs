@@ -21,9 +21,6 @@ pub enum ApiClientError {
         raw: String,
     },
 
-    #[error("URL parse error: {0:?}")]
-    UrlParse(#[from] actix_web::error::ParseError),
-
     #[error("Other error: {0:?}")]
     Other(#[from] anyhow::Error),
 }
@@ -74,7 +71,7 @@ impl ReqwestApiClient {
 #[async_trait]
 impl ApiClient for ReqwestApiClient {
     async fn call_embed(&self, request: &EmbedApiRequest) -> ApiClientResult<Vec<Vec<f64>>> {
-        let target_url = self.base_url.join("/embed").expect("Failed to build url");
+        let target_url = self.base_url.join("/embed").expect("Always valid");
         let result_string = self
             .client
             .post(target_url)

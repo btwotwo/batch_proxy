@@ -45,6 +45,10 @@ impl EmbedRequestClient {
             },
         )
     }
+
+    pub fn client_id(&self) -> Uuid {
+        self.reply_handle.client_id
+    }
 }
 
 pub struct EmbedRequestHandle {

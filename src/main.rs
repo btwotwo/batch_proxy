@@ -15,7 +15,7 @@ async fn embed(batch_manager: web::Data<BatchManagerHandle>, req: web::Json<Embe
         .await
         .map_err(|e: anyhow::Error| actix_web::error::ErrorInternalServerError(e))?;
 
-    let json = serde_json::to_string(&result).unwrap();
+    let json = serde_json::to_string(&result)?;
 
     Ok(json)
 }

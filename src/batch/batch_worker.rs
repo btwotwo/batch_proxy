@@ -78,6 +78,10 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
 
         let (current_batch_size, requests) = self.request_store.drain();
 
+        let client_ids: Vec<_> = requests.iter().map(|r| r.client_id()).collect();
+
+        info!("Flushing requests from clients. [client_ids = {:#?}]", client_ids);
+
         request_executor::execute_embed_request(
             requests,
             Arc::clone(&self.api_parameters),
@@ -88,7 +92,10 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
 
     // Message handlers
     fn handle_new_request(&mut self, req: EmbedRequestClient) {
+        info!("Accepted request from client. [client_id = {}]", req.client_id());
+        
         if let Some(req) = self.request_store.try_store(req) {
+            info!("Could not store request, max batch size was reached. Flushing current batch.");
             self.flush_batch();
             self.request_store.force_store(req);
         }
