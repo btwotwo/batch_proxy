@@ -11,7 +11,7 @@ use crate::{
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
-use super::{request_executor, request_store::RequestStore};
+use super::{request_executor::{self, RequestExecutor}, request_store::RequestStore};
 
 enum BatchWorkerMessage {
     NewRequest(EmbedRequestClient),
@@ -47,9 +47,9 @@ impl EmbedApiBatchWorkerHandle {
 
 pub struct EmbedApiBatchWorker<TApiClient: ApiClient> {
     request_store: RequestStore<EmbedRequestClient>,
+    request_executor: RequestExecutor<TApiClient>,
     receiver: mpsc::Receiver<BatchWorkerMessage>,
-    api_client: Arc<TApiClient>,
-    api_parameters: Arc<EmbedRequestGroupingParams>,
+    // TODO: Add worker ID
 }
 
 impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
@@ -61,8 +61,7 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
     ) -> Self {
         Self {
             request_store: RequestStore::new(batch_config.max_batch_size),
-            api_parameters: Arc::new(api_parameters),
-            api_client,
+            request_executor: RequestExecutor::new(api_client, api_parameters),
             receiver,
         }
     }
@@ -87,11 +86,9 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
             client_ids
         );
 
-        request_executor::execute_embed_request(
-            requests,
-            Arc::clone(&self.api_parameters),
-            Arc::clone(&self.api_client),
+        self.request_executor.execute_embed_request(
             current_batch_size,
+            requests,
         );
     }
 
@@ -127,7 +124,7 @@ pub fn start<TApiClient: ApiClient + 'static>(
                     match msg {
                         Some(msg) => worker.handle_message(msg),
                         None => {
-                            info!("Last sender was dropped, flushing batch and stopping batch worker with request parameters {:?}", worker.api_parameters);
+                            info!("Last sender was dropped, flushing batch and stopping batch worker.");
                             worker.flush_batch();
                             break;
                         }
@@ -137,7 +134,7 @@ pub fn start<TApiClient: ApiClient + 'static>(
                     worker.flush_batch();
                 },
                 _ = cancellation_token.cancelled() => {
-                    info!("Flusing batch and stopping worker with request parameters {:?}", worker.api_parameters);
+                    info!("Flusing batch and stopping worker.");
                     worker.flush_batch();
                     break;
                 }
