@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use log::error;
 use anyhow::anyhow;
+use log::error;
 
-use crate::{api_client::{ApiClient, EmbedApiRequest}, request::{EmbedRequestHandle, EmbedRequestParams}};
+use crate::{
+    api_client::{ApiClient, EmbedApiRequest},
+    request::{EmbedRequestHandle, EmbedRequestParams},
+};
 
 
 pub fn execute_request(
@@ -40,10 +43,10 @@ pub fn execute_request(
                     let client_data: Vec<_> = result_iterator.by_ref().take(data_len).collect();
 
                     client.send(Ok(client_data)).unwrap_or_else(|_| {
-                    error!(
-                        "Could not send response to client, receiver has dropped. [ClientId = TODO]"
-                    )
-                });
+                        error!(
+                            "Could not send response to client, receiver has dropped. [ClientId = TODO]"
+                        )
+                    });
                 }
             }
 
