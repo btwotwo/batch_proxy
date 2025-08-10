@@ -12,38 +12,38 @@ use crate::{
 
 use super::{request_executor, request_store::RequestStore};
 
-enum BatchMessage {
+enum BatchWorkerMessage {
     NewRequest(EmbedRequestHandle),
 }
 
-struct EmbedApiBatchWorkerHandle {
-    sender: mpsc::Sender<BatchMessage>,
+pub struct EmbedApiBatchWorkerHandle {
+    sender: mpsc::Sender<BatchWorkerMessage>,
 }
 
 impl EmbedApiBatchWorkerHandle {
     pub async fn put_request(&self, req: EmbedRequestHandle) {
         self.sender
-            .send(BatchMessage::NewRequest(req))
+            .send(BatchWorkerMessage::NewRequest(req))
             .await
             .expect("TODO: Proper error handling")
     }
 }
 
-struct EmbedApiBatchWorker<TApiClient: ApiClient> {
+pub struct EmbedApiBatchWorker<TApiClient: ApiClient> {
     request_store: RequestStore<EmbedRequestHandle>,
-    receiver: mpsc::Receiver<BatchMessage>,
+    receiver: mpsc::Receiver<BatchWorkerMessage>,
     api_client: Arc<TApiClient>,
     api_parameters: Arc<EmbedRequestParams>,
 }
 
 impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
     pub fn start(
-        api_client: TApiClient,
+        api_client: Arc<TApiClient>,
         api_parameters: EmbedRequestParams,
         batch_config: &BatchConfiguration,
         cancellation_token: CancellationToken,
     ) -> EmbedApiBatchWorkerHandle {
-        let (tx, rx) = mpsc::channel::<BatchMessage>(64);
+        let (tx, rx) = mpsc::channel::<BatchWorkerMessage>(64);
         let mut task = Self::new(rx, api_client, api_parameters, batch_config);
         let waiting_time_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
 
@@ -76,22 +76,22 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
     }
 
     fn new(
-        receiver: mpsc::Receiver<BatchMessage>,
-        api_client: TApiClient,
+        receiver: mpsc::Receiver<BatchWorkerMessage>,
+        api_client: Arc<TApiClient>,
         api_parameters: EmbedRequestParams,
         batch_config: &BatchConfiguration,
     ) -> Self {
         Self {
             request_store: RequestStore::new(batch_config.max_batch_size),
-            api_client: Arc::new(api_client),
             api_parameters: Arc::new(api_parameters),
+            api_client,
             receiver,
         }
     }
 
-    fn handle_message(&mut self, message: BatchMessage) {
+    fn handle_message(&mut self, message: BatchWorkerMessage) {
         match message {
-            BatchMessage::NewRequest(req) => self.handle_new_request(req),
+            BatchWorkerMessage::NewRequest(req) => self.handle_new_request(req),
         }
     }
 
