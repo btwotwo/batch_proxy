@@ -47,7 +47,7 @@ impl EmbedApiBatchWorkerHandle {
 
 pub struct EmbedApiBatchWorker<TApiClient: ApiClient> {
     request_store: RequestStore<EmbedRequestClient>,
-    request_executor: RequestExecutor<TApiClient>,
+    request_executor: RequestExecutor<TApiClient, EmbedRequestGroupingParams>,
     receiver: mpsc::Receiver<BatchWorkerMessage>,
     // TODO: Add worker ID
 }

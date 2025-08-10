@@ -8,12 +8,12 @@ use crate::{
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
-pub struct RequestExecutor<TApiClient: ApiClient> {
-    request_parameters: Arc<EmbedRequestGroupingParams>,
+pub struct RequestExecutor<TApiClient: ApiClient, TGroupingParams> {
+    request_parameters: Arc<TGroupingParams>,
     api_client: Arc<TApiClient>,
 }
 
-impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient> {
+impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGroupingParams> {
     pub fn new(api_client: Arc<TApiClient>, request_parameters: EmbedRequestGroupingParams) -> Self {
         Self {
             api_client: api_client,
