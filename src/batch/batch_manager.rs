@@ -60,6 +60,7 @@ enum BatchManagerMessage {
 }
 
 impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
+    // TODO: Periodical cleanup of workers?
     fn handle_messages(&mut self, message: BatchManagerMessage) {
         match message {
             BatchManagerMessage::NewRequest(client, req_params) => {
