@@ -8,7 +8,6 @@ use crate::{
     request::{EmbedRequestHandle, EmbedRequestParams},
 };
 
-
 pub fn execute_request(
     requests: Vec<EmbedRequestHandle>,
     request_parameters: Arc<EmbedRequestParams>,

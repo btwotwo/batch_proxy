@@ -26,4 +26,3 @@ impl Request for EmbedRequestHandle {
         self.request_data.len()
     }
 }
-
