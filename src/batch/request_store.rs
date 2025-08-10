@@ -11,7 +11,7 @@ impl<TRequest: Request> RequestStore<TRequest> {
         Self {
             pending_requests: Vec::new(),
             current_batch_size: 0,
-            max_batch_size
+            max_batch_size,
         }
     }
 
@@ -22,7 +22,7 @@ impl<TRequest: Request> RequestStore<TRequest> {
         if self.current_batch_size + data_count > self.max_batch_size {
             return Some(req);
         }
-        
+
         self.current_batch_size += data_count;
         self.pending_requests.push(req);
 
@@ -37,6 +37,7 @@ impl<TRequest: Request> RequestStore<TRequest> {
         self.pending_requests.push(req);
     }
 
+    /// Empties the store, returning stored requests and current batch size.
     pub fn drain(&mut self) -> (usize, Vec<TRequest>) {
         let requests = std::mem::take(&mut self.pending_requests);
         let current_batch_size = std::mem::take(&mut self.current_batch_size);
@@ -79,7 +80,7 @@ mod tests {
         let result = store.try_store(MockRequest);
 
         assert!(result.is_some(), "Should return request back.");
-        
+
         let (data_size, data) = store.drain();
 
         assert_eq!(data_size, 0);
