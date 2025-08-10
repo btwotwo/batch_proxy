@@ -2,7 +2,7 @@ use log::error;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-use crate::api_client::{EmbedApiRequest, EmbedApiRequestInputs};
+use crate::api_client::EmbedApiRequestInputs;
 
 pub trait Request {
     fn data_count(&self) -> usize;
@@ -54,13 +54,13 @@ pub struct EmbedRequestHandle {
 impl EmbedRequestHandle {
     pub fn reply_with_result(self, result: Vec<Vec<f64>>) {
         self.reply_handle.send(Ok(result)).unwrap_or_else(|_| {
-            error!("Could not send response to client, receiver has dropped. [ClientId = TODO]")
+            error!("Could not send response to client, receiver has dropped. [ClientId = {0}]", self.request_id)
         });
     }
 
     pub fn reply_with_error(self, error: anyhow::Error) {
         self.reply_handle.send(Err(error)).unwrap_or_else(|_| {
-            error!("Could not send response to client, receiver has dropped. [ClientId = TODO]")
+            error!("Could not send response to client, receiver has dropped. [ClientId = {0}]", self.request_id)
         });
     }
 }
