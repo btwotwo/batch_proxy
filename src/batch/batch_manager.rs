@@ -1,10 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
+use log::info;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use crate::{
     api_client::{ApiClient, EmbedApiRequest},
@@ -28,19 +27,30 @@ pub struct BatchManagerHandle {
 }
 
 impl BatchManagerHandle {
-    pub async fn call_batched_embed(&self, mut api_request: EmbedApiRequest) -> anyhow::Result<Vec<Vec<f64>>> {
+    pub async fn call_batched_embed(
+        &self,
+        mut api_request: EmbedApiRequest,
+    ) -> anyhow::Result<Vec<Vec<f64>>> {
         let request_data = std::mem::take(&mut api_request.inputs);
-        
+
         let request_params = EmbedRequestGroupingParams {
             truncate: api_request.truncate,
             normalize: api_request.normalize,
             dimensions: api_request.dimensions,
             prompt_name: api_request.prompt_name,
-            truncation_direction: api_request.truncation_direction
+            truncation_direction: api_request.truncation_direction,
         };
 
-        let (result, client) = EmbedRequestClient::new(request_data);
-        self.sender.send(BatchManagerMessage::NewRequest(client, request_params)).await?;
+        let client_id = Uuid::new_v4();
+        info!(
+            "Processing request from client. [input = {:?}, params = {:?}, client_id = {:?}]",
+            request_data, request_params, client_id
+        );
+
+        let (result, client) = EmbedRequestClient::new(request_data, client_id);
+        self.sender
+            .send(BatchManagerMessage::NewRequest(client, request_params))
+            .await?;
         result.await?
     }
 }
@@ -61,7 +71,7 @@ impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
                         CancellationToken::new(),
                     )
                 });
-                
+
                 worker.put_request(client);
             }
         }

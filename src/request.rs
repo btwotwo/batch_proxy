@@ -26,6 +26,7 @@ pub struct EmbedRequestClient {
 impl EmbedRequestClient {
     pub fn new(
         request_inputs: EmbedApiRequestInputs,
+        client_id: Uuid
     ) -> (oneshot::Receiver<anyhow::Result<Vec<Vec<f64>>>>, Self) {
         let (sender, receiver) = oneshot::channel();
         let request_data = match request_inputs {
@@ -39,7 +40,7 @@ impl EmbedRequestClient {
                 request_data,
                 reply_handle: EmbedRequestHandle {
                     reply_handle: sender,
-                    request_id: Uuid::new_v4(),
+                    client_id
                 },
             },
         )
@@ -48,19 +49,19 @@ impl EmbedRequestClient {
 
 pub struct EmbedRequestHandle {
     pub reply_handle: oneshot::Sender<anyhow::Result<Vec<Vec<f64>>>>,
-    pub request_id: Uuid,
+    pub client_id: Uuid,
 }
 
 impl EmbedRequestHandle {
     pub fn reply_with_result(self, result: Vec<Vec<f64>>) {
         self.reply_handle.send(Ok(result)).unwrap_or_else(|_| {
-            error!("Could not send response to client, receiver has dropped. [ClientId = {0}]", self.request_id)
+            error!("Could not send response to client, receiver has dropped. [ClientId = {0}]", self.client_id)
         });
     }
 
     pub fn reply_with_error(self, error: anyhow::Error) {
         self.reply_handle.send(Err(error)).unwrap_or_else(|_| {
-            error!("Could not send response to client, receiver has dropped. [ClientId = {0}]", self.request_id)
+            error!("Could not send response to client, receiver has dropped. [ClientId = {0}]", self.client_id)
         });
     }
 }
