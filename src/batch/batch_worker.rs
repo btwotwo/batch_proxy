@@ -35,7 +35,9 @@ impl EmbedApiBatchWorkerHandle {
 
                     match err.0 {
                         BatchWorkerMessage::NewRequest(req) => {
-                            req.reply_handle.reply_with_error(anyhow!("Could not process request, please try again."));
+                            req.reply_handle.reply_with_error(anyhow!(
+                                "Could not process request, please try again."
+                            ));
                         }
                     }
                 })
@@ -80,7 +82,10 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
 
         let client_ids: Vec<_> = requests.iter().map(|r| r.client_id()).collect();
 
-        info!("Flushing requests from clients. [client_ids = {:#?}]", client_ids);
+        info!(
+            "Flushing requests from clients. [client_ids = {:#?}]",
+            client_ids
+        );
 
         request_executor::execute_embed_request(
             requests,
@@ -92,8 +97,11 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
 
     // Message handlers
     fn handle_new_request(&mut self, req: EmbedRequestClient) {
-        info!("Accepted request from client. [client_id = {}]", req.client_id());
-        
+        info!(
+            "Accepted request from client. [client_id = {}]",
+            req.client_id()
+        );
+
         if let Some(req) = self.request_store.try_store(req) {
             info!("Could not store request, max batch size was reached. Flushing current batch.");
             self.flush_batch();

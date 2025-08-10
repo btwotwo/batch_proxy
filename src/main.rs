@@ -9,7 +9,10 @@ mod config;
 mod request;
 
 #[post("/embed")]
-async fn embed(batch_manager: web::Data<BatchManagerHandle>, req: web::Json<EmbedApiRequest>) -> actix_web::Result<String> {
+async fn embed(
+    batch_manager: web::Data<BatchManagerHandle>,
+    req: web::Json<EmbedApiRequest>,
+) -> actix_web::Result<String> {
     let result = batch_manager
         .call_batched_embed(req.into_inner())
         .await
