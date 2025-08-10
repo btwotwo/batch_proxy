@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::Arc,
 };
 
@@ -12,7 +12,7 @@ use crate::{
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
-use super::batch_worker::{self, EmbedApiBatchWorker, EmbedApiBatchWorkerHandle};
+use super::batch_worker::{self, EmbedApiBatchWorkerHandle};
 
 struct BatchManager<TApiClient: ApiClient> {
     workers: HashMap<EmbedRequestGroupingParams, EmbedApiBatchWorkerHandle>,

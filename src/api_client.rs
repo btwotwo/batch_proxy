@@ -1,8 +1,7 @@
-use std::hash::BuildHasher;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use log::{error, info, trace};
+use log::error;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;

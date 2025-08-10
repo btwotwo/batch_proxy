@@ -1,8 +1,7 @@
-use actix_web::{App, HttpResponse, HttpServer, Responder, post, web};
-use api_client::{EmbedApiRequest, EmbedApiRequestInputs};
+use actix_web::{App, HttpServer, post, web};
+use api_client::EmbedApiRequest;
 use batch::batch_manager::BatchManagerHandle;
 use config::BatchConfiguration;
-use reqwest::{Client, ClientBuilder};
 
 mod api_client;
 mod batch;
