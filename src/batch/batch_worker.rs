@@ -78,7 +78,7 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
 
         let (current_batch_size, requests) = self.request_store.drain();
 
-        request_executor::execute_request(
+        request_executor::execute_embed_request(
             requests,
             Arc::clone(&self.api_parameters),
             Arc::clone(&self.api_client),

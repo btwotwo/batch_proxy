@@ -50,7 +50,7 @@ enum BatchManagerMessage {
 }
 
 impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
-    fn handle_message(&mut self, message: BatchManagerMessage) {
+    fn handle_messages(&mut self, message: BatchManagerMessage) {
         match message {
             BatchManagerMessage::NewRequest(client, req_params) => {
                 let worker = self.workers.entry(req_params.clone()).or_insert_with(|| {
@@ -82,7 +82,7 @@ pub fn start<TApiClient: ApiClient + 'static>(
 
     tokio::spawn(async move {
         while let Some(msg) = manager.receiver.recv().await {
-            manager.handle_message(msg);
+            manager.handle_messages(msg);
         }
     });
 

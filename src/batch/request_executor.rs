@@ -8,7 +8,7 @@ use crate::{
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
-pub fn execute_request(
+pub fn execute_embed_request(
     requests: Vec<EmbedRequestClient>,
     request_parameters: Arc<EmbedRequestGroupingParams>,
     api_client: Arc<impl ApiClient + 'static>,
