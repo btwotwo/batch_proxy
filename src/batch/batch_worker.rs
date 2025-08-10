@@ -1,84 +1,60 @@
 use std::{sync::Arc, time::Duration};
 
-use log::info;
+use anyhow::anyhow;
+use log::{error, info};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     api_client::ApiClient,
     config::BatchConfiguration,
-    request::{EmbedRequestHandle, EmbedRequestParams},
+    request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
 use super::{request_executor, request_store::RequestStore};
 
 enum BatchWorkerMessage {
-    NewRequest(EmbedRequestHandle),
+    NewRequest(EmbedRequestClient),
 }
 
+#[derive(Clone)]
 pub struct EmbedApiBatchWorkerHandle {
     sender: mpsc::Sender<BatchWorkerMessage>,
 }
 
 impl EmbedApiBatchWorkerHandle {
-    pub async fn put_request(&self, req: EmbedRequestHandle) {
-        self.sender
-            .send(BatchWorkerMessage::NewRequest(req))
-            .await
-            .expect("TODO: Proper error handling")
+    pub fn put_request(&self, req: EmbedRequestClient) {
+        let sender = self.sender.clone();
+
+        tokio::spawn(async move {
+            sender
+                .send(BatchWorkerMessage::NewRequest(req))
+                .await
+                .unwrap_or_else(|err| {
+                    error!("Error sending message to worker! [Error = {err}]");
+
+                    match err.0 {
+                        BatchWorkerMessage::NewRequest(req) => {
+                            req.reply_handle.reply_with_error(anyhow!("Could not process request, please try again."));
+                        }
+                    }
+                })
+        });
     }
 }
 
 pub struct EmbedApiBatchWorker<TApiClient: ApiClient> {
-    request_store: RequestStore<EmbedRequestHandle>,
+    request_store: RequestStore<EmbedRequestClient>,
     receiver: mpsc::Receiver<BatchWorkerMessage>,
     api_client: Arc<TApiClient>,
-    api_parameters: Arc<EmbedRequestParams>,
+    api_parameters: Arc<EmbedRequestGroupingParams>,
 }
 
 impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
-    pub fn start(
-        api_client: Arc<TApiClient>,
-        api_parameters: EmbedRequestParams,
-        batch_config: &BatchConfiguration,
-        cancellation_token: CancellationToken,
-    ) -> EmbedApiBatchWorkerHandle {
-        let (tx, rx) = mpsc::channel::<BatchWorkerMessage>(64);
-        let mut task = Self::new(rx, api_client, api_parameters, batch_config);
-        let waiting_time_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
-
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    msg = task.receiver.recv() => {
-                        match msg {
-                            Some(msg) => task.handle_message(msg),
-                            None => {
-                                info!("Last sender was dropped, flushing batch and stopping batch worker with request parameters {:?}", task.api_parameters);
-                                task.flush_batch();
-                                break;
-                            }
-                        }
-                    },
-                    _ = tokio::time::sleep(waiting_time_duration) => {
-                        task.flush_batch();
-                    },
-                    _ = cancellation_token.cancelled() => {
-                        info!("Flusing batch and stopping worker with request parameters {:?}", task.api_parameters);
-                        task.flush_batch();
-                        break;
-                    }
-                }
-            }
-        });
-
-        EmbedApiBatchWorkerHandle { sender: tx }
-    }
-
     fn new(
         receiver: mpsc::Receiver<BatchWorkerMessage>,
         api_client: Arc<TApiClient>,
-        api_parameters: EmbedRequestParams,
+        api_parameters: EmbedRequestGroupingParams,
         batch_config: &BatchConfiguration,
     ) -> Self {
         Self {
@@ -111,10 +87,51 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
     }
 
     // Message handlers
-    fn handle_new_request(&mut self, req: EmbedRequestHandle) {
+    fn handle_new_request(&mut self, req: EmbedRequestClient) {
         if let Some(req) = self.request_store.try_store(req) {
             self.flush_batch();
             self.request_store.force_store(req);
         }
     }
 }
+
+pub fn start<TApiClient: ApiClient + 'static>(
+    api_client: Arc<TApiClient>,
+    api_parameters: EmbedRequestGroupingParams,
+    batch_config: &BatchConfiguration,
+    cancellation_token: CancellationToken,
+) -> EmbedApiBatchWorkerHandle {
+    let (sender, receiver) = mpsc::channel::<BatchWorkerMessage>(64);
+    let mut worker = EmbedApiBatchWorker::new(receiver, api_client, api_parameters, batch_config);
+    let waiting_time_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
+
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                msg = worker.receiver.recv() => {
+                    match msg {
+                        Some(msg) => worker.handle_message(msg),
+                        None => {
+                            info!("Last sender was dropped, flushing batch and stopping batch worker with request parameters {:?}", worker.api_parameters);
+                            worker.flush_batch();
+                            break;
+                        }
+                    }
+                },
+                _ = tokio::time::sleep(waiting_time_duration) => {
+                    worker.flush_batch();
+                },
+                _ = cancellation_token.cancelled() => {
+                    info!("Flusing batch and stopping worker with request parameters {:?}", worker.api_parameters);
+                    worker.flush_batch();
+                    break;
+                }
+            }
+        }
+    });
+
+    EmbedApiBatchWorkerHandle { sender }
+}
+
+#[cfg(test)]
+mod tests {}
