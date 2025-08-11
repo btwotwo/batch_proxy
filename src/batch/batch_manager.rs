@@ -99,3 +99,4 @@ pub fn start<TApiClient: ApiClient + 'static>(
 
     BatchManagerHandle { sender }
 }
+

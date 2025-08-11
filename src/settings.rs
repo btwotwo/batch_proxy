@@ -1,6 +1,7 @@
 use std::env;
 
 use config::{Config, ConfigError, Environment, File};
+use log::info;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -37,9 +38,10 @@ impl Settings {
             .add_source(File::with_name("settings"))
             .add_source(File::with_name(&format!("settings.{run_mode}")).required(false))
             .add_source(File::with_name("settings.local").required(false))
-            .add_source(Environment::with_prefix("batch_proxy"))
+            .add_source(Environment::with_prefix("batch_proxy").separator("__"))
             .build()?;
-
+        
+        info!("Loaded settings. {:?}", s);
         s.try_deserialize()
     }
 }
