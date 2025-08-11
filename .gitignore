@@ -1,10 +1,5 @@
 /target
 .direnv
-/appsettings.local.toml
+/text-embeddings-data
 
 
-# Added by cargo
-#
-# already existing elements were commented out
-
-#/target
