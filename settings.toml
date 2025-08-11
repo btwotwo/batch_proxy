@@ -1,0 +1,9 @@
+[api]
+target_port = 8081
+
+[inference_api]
+target_url = "https://localhost:8080"
+
+[batch]
+max_batch_size = 10
+max_waiting_time_ms = 500
