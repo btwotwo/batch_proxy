@@ -123,3 +123,6 @@ Introducing generic, decoupled components would make it easier to mock dependenc
 
 *** Workers cleanup
 In the current implementation the workers stay in memory forever. This oppens possibilities for DoS attacks, which can easily be circumvented by removing workers on periodic basis.
+
+*** Better error handling
+Currently if something goes wrong, user receives a generic error. It would be better to specify what exactly went wrong and depending on the error relay it to the user.
