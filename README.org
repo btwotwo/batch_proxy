@@ -1,0 +1,122 @@
+* Description  
+This is a batch-processing proxy that wraps the API of [[https://github.com/huggingface/text-embeddings-inference][Text Embeddings Inference]].  
+It is implemented in Rust, using [[https://tokio.rs/][Tokio]] as the async runtime, [[https://actix.rs/][Actix-web]] as the HTTP API framework, and [[https://github.com/seanmonstar/reqwest][reqwest]] as the underlying HTTP client.  
+
+** Architecture  
+The proxy uses a lightweight actor model to manage shared state.  
+
+1. **Request arrival:** When a request arrives, the proxy extracts all common parameters (basically everything except ~input~) and assigns them to a worker instance.  
+2. **Worker messaging:** The proxy sends the worker a message containing both the client’s reply handle and the main request payload.  
+3. **Batching logic:** The worker waits for new requests or until the configured waiting timeout (~max_waiting_timeout~) expires. If the queued inputs count exceeds the configured ~max_batch_size~, the worker flushes the batch immediately.  
+4. **Request execution:** On flushing, the worker combines the batch’s inputs and common API parameters, sends them to the target API, and distributes the resulting responses back to the corresponding clients.  
+
+** Configuration  
+The proxy is configured via ~settings.toml~. Local development overrides can be placed in ~settings.local.toml~.  
+All settings can also be overridden using environment variables, which must:  
+- Have the ~BATCH_PROXY~ prefix  
+- Use double underscores (~__~) as separators between nested fields  
+
+Example: To override ~inference_api.target_url~, set:  
+~BATCH_PROXY__INFERENCE_API__TARGET_URL~  
+
+** How to run  
+The proxy can be run with the included ~docker-compose.yml~.  
+Running ~docker compose up~ will start both the proxy and the underlying text inference API, which defaults to the ~nomic-ai/nomic-embed-text-v1.5~ model.  
+
+To run only the proxy, disable the API container in ~docker-compose.yml~ (or use ~docker compose start proxy~) and configure the proxy to point to the correct API URL.  
+
+** Benchmarks  
+Benchmarks were performed with the [[https://github.com/rakyll/hey][Hey]] load-testing tool.  
+
+Test command:  
+~hey -m POST -d '{"inputs": "Hello world!"}' -H "Content-Type: application/json" -n 1000 ${API}~  
+where ~API~ is set to either the proxy endpoint or the text inference API directly.  
+
+*** Batch proxy  
+Settings: ~max_batch_size=8~, ~max_waiting_time=500ms~  
+#+begin_src
+Summary:
+  Total:	16.5318 secs
+  Slowest:	1.0362 secs
+  Fastest:	0.1543 secs
+  Average:	0.8013 secs
+  Requests/sec:	60.4896
+
+  Total data:	9541000 bytes
+  Size/request:	9541 bytes
+
+Response time histogram:
+  0.154 [1]	|
+  0.242 [7]	|■
+  0.331 [8]	|■
+  0.419 [0]	|
+  0.507 [8]	|■
+  0.595 [0]	|
+  0.683 [20]	|■■
+  0.772 [309]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.860 [384]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.948 [200]	|■■■■■■■■■■■■■■■■■■■■■
+  1.036 [63]	|■■■■■■■
+
+
+Latency distribution:
+  10% in 0.7255 secs
+  25% in 0.7533 secs
+  50% in 0.7967 secs
+  75% in 0.8620 secs
+  90% in 0.9107 secs
+  95% in 0.9637 secs
+  99% in 1.0097 secs
+#+end_src  
+
+*** Text inference API  
+#+begin_src
+Summary:
+  Total:	16.7006 secs
+  Slowest:	1.0315 secs
+  Fastest:	0.0588 secs
+  Average:	0.8172 secs
+  Requests/sec:	59.8780
+
+  Total data:	9541000 bytes
+  Size/request:	9541 bytes
+
+Response time histogram:
+  0.059 [1]	|
+  0.156 [1]	|
+  0.253 [8]	|■
+  0.351 [1]	|
+  0.448 [8]	|■
+  0.545 [9]	|■
+  0.642 [9]	|■
+  0.740 [48]	|■■■■
+  0.837 [519]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.934 [288]	|■■■■■■■■■■■■■■■■■■■■■■
+  1.031 [108]	|■■■■■■■■
+
+
+Latency distribution:
+  10% in 0.7491 secs
+  25% in 0.7727 secs
+  50% in 0.8167 secs
+  75% in 0.8744 secs
+  90% in 0.9382 secs
+  95% in 0.9722 secs
+  99% in 1.0152 secs
+#+end_src  
+
+*** Summary
+As we can see, requests going through the batch proxy are slightly faster.
+In particular, a significant portion of requests completed in ~0.772 sec~, while the majority of requests to the text inference API completed in ~0.837 sec~.  
+
+** Improvement points  
+
+*** More abstractions  
+The current implementation is tightly coupled to the ~/embed~ endpoint, including its parameters and results.  
+For example:  
+- ~BatchWorker~ does not need to know which API it calls.  
+- ~RequestExecutor~ could be generalized by moving API-agnostic logic (e.g., splitting results and delivering them to clients) into a shared utility function.  
+
+*** More tests  
+The lack of abstraction makes the code harder to test, especially since it depends on I/O.  
+Introducing generic, decoupled components would make it easier to mock dependencies and test only the logic specific to each module.  
