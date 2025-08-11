@@ -76,12 +76,3 @@ impl<TApiClient: ApiClient + 'static> GenericRequestExecutor<EmbedRequestClient>
         });
     }
 }
-
-impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGroupingParams> {
-    pub fn execute_embed_request(
-        &self,
-        current_batch_size: usize,
-        requests: Vec<EmbedRequestClient>,
-    ) {
-    }
-}
