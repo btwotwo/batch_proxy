@@ -120,3 +120,6 @@ For example:
 *** More tests  
 The lack of abstraction makes the code harder to test, especially since it depends on I/O.  
 Introducing generic, decoupled components would make it easier to mock dependencies and test only the logic specific to each module.  
+
+*** Workers cleanup
+In the current implementation the workers stay in memory forever. This oppens possibilities for DoS attacks, which can easily be circumvented by removing workers on periodic basis.
