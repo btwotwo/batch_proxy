@@ -1,11 +1,11 @@
 use actix_web::{App, HttpServer, post, web};
 use api_client::EmbedApiRequest;
 use batch::batch_manager::BatchManagerHandle;
-use config::BatchConfiguration;
+use settings::{BatchSettings, Settings};
 
 mod api_client;
 mod batch;
-mod config;
+mod settings;
 mod request;
 
 #[post("/embed")]
@@ -26,17 +26,22 @@ async fn embed(
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     colog::init();
-    let api_client = api_client::ReqwestApiClient::new("http://localhost:8080").unwrap();
+    let settings = web::Data::new(Settings::new().unwrap());
+    let target_port = settings.api.target_port;
+    let api_client = api_client::ReqwestApiClient::new(&settings.inference_api.target_url).unwrap();
+
     let batch_manager = web::Data::new(batch::batch_manager::start(
         api_client,
-        BatchConfiguration {
-            max_waiting_time_ms: 5000,
-            max_batch_size: 10,
-        },
+        settings.batch.clone(),
     ));
 
-    HttpServer::new(move || App::new().app_data(batch_manager.clone()).service(embed))
-        .bind(("127.0.0.1", 8087))?
-        .run()
-        .await
+    HttpServer::new(move || {
+        App::new()
+            .app_data(batch_manager.clone())
+            .app_data(settings.clone())
+            .service(embed)
+    })
+    .bind(("127.0.0.1", target_port))?
+    .run()
+    .await
 }
