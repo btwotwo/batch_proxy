@@ -25,7 +25,7 @@ async fn embed(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    colog::init();
+    env_logger::init();
     let settings = web::Data::new(Settings::new().unwrap());
     let target_port = settings.api.target_port;
     let api_client = api_client::ReqwestApiClient::new(&settings.inference_api.target_url).unwrap();
@@ -41,7 +41,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(settings.clone())
             .service(embed)
     })
-    .bind(("127.0.0.1", target_port))?
+    .bind(("0.0.0.0", target_port))?
     .run()
     .await
 }
