@@ -67,7 +67,9 @@ impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
             BatchManagerMessage::NewRequest(client, req_params) => {
                 let worker = self.workers.entry(req_params.clone()).or_insert_with(|| {
                     let worker_id = Uuid::new_v4();
+                    
                     info!("Starting new worker. [parameters = {req_params:#?}, worker_id = {worker_id}");
+                    
                     batch_worker::start(
                         Arc::clone(&self.api_client),
                         req_params,

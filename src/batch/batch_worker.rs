@@ -169,6 +169,3 @@ async fn run_worker(
         }
     }
 }
-
-#[cfg(test)]
-mod batch_worker_tests {}
