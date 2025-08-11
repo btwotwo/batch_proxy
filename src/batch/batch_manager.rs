@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     api_client::{ApiClient, EmbedApiRequest},
-    config::BatchConfiguration,
+    settings::BatchSettings,
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
@@ -16,7 +16,7 @@ use super::batch_worker::{self, EmbedApiBatchWorkerHandle};
 struct BatchManager<TApiClient: ApiClient> {
     workers: HashMap<EmbedRequestGroupingParams, EmbedApiBatchWorkerHandle>,
     api_client: Arc<TApiClient>,
-    batch_config: BatchConfiguration,
+    batch_config: BatchSettings,
 
     receiver: mpsc::Receiver<BatchManagerMessage>,
 }
@@ -81,7 +81,7 @@ impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
 
 pub fn start<TApiClient: ApiClient + 'static>(
     api_client: TApiClient,
-    batch_config: BatchConfiguration,
+    batch_config: BatchSettings,
 ) -> BatchManagerHandle {
     let (sender, receiver) = mpsc::channel::<BatchManagerMessage>(64);
     let mut manager = BatchManager {

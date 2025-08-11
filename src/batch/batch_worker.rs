@@ -7,11 +7,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     api_client::ApiClient,
-    config::BatchConfiguration,
+    settings::BatchSettings,
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
-use super::{request_executor::{self, RequestExecutor}, request_store::RequestStore};
+use super::{
+    request_executor::{self, RequestExecutor},
+    request_store::RequestStore,
+};
 
 enum BatchWorkerMessage {
     NewRequest(EmbedRequestClient),
@@ -52,12 +55,15 @@ pub struct EmbedApiBatchWorker<TApiClient: ApiClient> {
     // TODO: Add worker ID
 }
 
-impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
+impl<TApiClient> EmbedApiBatchWorker<TApiClient>
+where
+    TApiClient: ApiClient + 'static,
+{
     fn new(
         receiver: mpsc::Receiver<BatchWorkerMessage>,
         api_client: Arc<TApiClient>,
         api_parameters: EmbedRequestGroupingParams,
-        batch_config: &BatchConfiguration,
+        batch_config: &BatchSettings,
     ) -> Self {
         Self {
             request_store: RequestStore::new(batch_config.max_batch_size),
@@ -86,10 +92,8 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
             client_ids
         );
 
-        self.request_executor.execute_embed_request(
-            current_batch_size,
-            requests,
-        );
+        self.request_executor
+            .execute_embed_request(current_batch_size, requests);
     }
 
     // Message handlers
@@ -107,10 +111,10 @@ impl<TApiClient: ApiClient + 'static> EmbedApiBatchWorker<TApiClient> {
     }
 }
 
-pub fn start<TApiClient: ApiClient + 'static>(
-    api_client: Arc<TApiClient>,
+pub fn start(
+    api_client: Arc<impl ApiClient + 'static>,
     api_parameters: EmbedRequestGroupingParams,
-    batch_config: &BatchConfiguration,
+    batch_config: &BatchSettings,
     cancellation_token: CancellationToken,
 ) -> EmbedApiBatchWorkerHandle {
     let (sender, receiver) = mpsc::channel::<BatchWorkerMessage>(64);
