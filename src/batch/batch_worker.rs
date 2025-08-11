@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    request_executor::{self, GenericRequestExecutor, RequestExecutor},
+    request_executor::{GenericRequestExecutor, RequestExecutor},
     request_store::RequestStore,
 };
 
@@ -60,7 +60,8 @@ pub struct EmbedApiBatchWorker<TRequestExecutor: GenericRequestExecutor<EmbedReq
     worker_id: Uuid,
 }
 
-impl<TApiExecutor: GenericRequestExecutor<EmbedRequestClient> + 'static> EmbedApiBatchWorker<TApiExecutor>
+impl<TApiExecutor: GenericRequestExecutor<EmbedRequestClient> + 'static>
+    EmbedApiBatchWorker<TApiExecutor>
 {
     fn new(
         request_store: RequestStore<EmbedRequestClient>,
@@ -131,7 +132,7 @@ pub fn start(
     let request_store = RequestStore::new(batch_config.max_batch_size);
 
     let worker =
-        EmbedApiBatchWorker::new(request_store, request_executor, receiver, worker_id.clone());
+        EmbedApiBatchWorker::new(request_store, request_executor, receiver, worker_id);
     let flush_wait_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
 
     tokio::spawn(async move {

@@ -1,7 +1,7 @@
 use actix_web::{App, HttpServer, post, web};
 use api_client::EmbedApiRequest;
 use batch::batch_manager::BatchManagerHandle;
-use settings::{BatchSettings, Settings};
+use settings::Settings;
 
 mod api_client;
 mod batch;
@@ -45,4 +45,3 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
-

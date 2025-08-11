@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use log::error;
 
 use crate::{
-    api_client::{self, ApiClient, EmbedApiRequest, EmbedApiRequestInputs},
+    api_client::{ApiClient, EmbedApiRequest, EmbedApiRequestInputs},
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
 };
 
@@ -18,7 +18,7 @@ impl<TApiClient: ApiClient + 'static, TGroupingParams>
 {
     pub fn new(api_client: Arc<TApiClient>, request_parameters: TGroupingParams) -> Self {
         Self {
-            api_client: api_client,
+            api_client,
             request_parameters: Arc::new(request_parameters),
         }
     }
