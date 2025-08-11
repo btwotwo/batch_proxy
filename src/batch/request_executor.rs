@@ -13,14 +13,18 @@ pub struct RequestExecutor<TApiClient: ApiClient, TGroupingParams> {
     api_client: Arc<TApiClient>,
 }
 
-impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGroupingParams> {
-    pub fn new(api_client: Arc<TApiClient>, request_parameters: EmbedRequestGroupingParams) -> Self {
+impl<TApiClient: ApiClient + 'static, TGroupingParams>
+    RequestExecutor<TApiClient, TGroupingParams>
+{
+    pub fn new(api_client: Arc<TApiClient>, request_parameters: TGroupingParams) -> Self {
         Self {
             api_client: api_client,
             request_parameters: Arc::new(request_parameters),
         }
     }
+}
 
+impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGroupingParams> {
     pub fn execute_embed_request(
         &self,
         current_batch_size: usize,
@@ -28,7 +32,7 @@ impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGr
     ) {
         let request_parameters = Arc::clone(&self.request_parameters);
         let api_client = Arc::clone(&self.api_client);
-        
+
         tokio::spawn(async move {
             let mut inputs = Vec::with_capacity(current_batch_size);
             let mut clients = Vec::with_capacity(requests.len());
@@ -69,12 +73,4 @@ impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGr
             }
         });
     }
-}
-
-pub fn execute_embed_request(
-    requests: Vec<EmbedRequestClient>,
-    request_parameters: Arc<EmbedRequestGroupingParams>,
-    api_client: Arc<impl ApiClient + 'static>,
-    current_batch_size: usize,
-) {
 }
