@@ -5,10 +5,10 @@ It is implemented in Rust, using [[https://tokio.rs/][Tokio]] as the async runti
 ** Architecture  
 The proxy uses a lightweight actor model to manage shared state.  
 
-1. **Request arrival:** When a request arrives, the proxy extracts all common parameters (basically everything except ~input~) and assigns them to a worker instance.  
-2. **Worker messaging:** The proxy sends the worker a message containing both the client’s reply handle and the main request payload.  
-3. **Batching logic:** The worker waits for new requests or until the configured waiting timeout (~max_waiting_timeout~) expires. If the queued inputs count exceeds the configured ~max_batch_size~, the worker flushes the batch immediately.  
-4. **Request execution:** On flushing, the worker combines the batch’s inputs and common API parameters, sends them to the target API, and distributes the resulting responses back to the corresponding clients.  
+1. *Request arrival:* When a request arrives, the proxy extracts all common parameters (basically everything except ~input~) and assigns them to a worker instance.  
+2. *Worker messaging:* The proxy sends the worker a message containing both the client’s reply handle and the main request payload.  
+3. *Batching logic:* The worker waits for new requests or until the configured waiting timeout (~max_waiting_timeout~) expires. If the queued inputs count exceeds the configured ~max_batch_size~, the worker flushes the batch immediately.  
+4. *Request execution:* On flushing, the worker combines the batch’s inputs and common API parameters, sends them to the target API, and distributes the resulting responses back to the corresponding clients.  
 
 ** Configuration  
 The proxy is configured via ~settings.toml~. Local development overrides can be placed in ~settings.local.toml~.  
