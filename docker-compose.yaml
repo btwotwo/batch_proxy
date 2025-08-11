@@ -3,7 +3,10 @@ services:
     build: .
     ports:
       - "8081:8081"
-
+    environment:
+      BATCH_PROXY__INFERENCE_API__TARGET_URL: "http://inference-api"
+      RUST_LOG: "debug"
+      
   inference-api:
     image: "ghcr.io/huggingface/text-embeddings-inference:cpu-1.8"
     ports:
