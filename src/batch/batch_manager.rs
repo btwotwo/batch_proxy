@@ -75,6 +75,7 @@ impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
                         req_params,
                         &self.batch_config,
                         worker_id,
+                        // TODO: Use cancellation token for graceful shutdown
                         CancellationToken::new(),
                     )
                 });
