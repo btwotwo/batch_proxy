@@ -6,7 +6,8 @@ services:
     environment:
       BATCH_PROXY__INFERENCE_API__TARGET_URL: "http://inference-api"
       BATCH_PROXY__BATCH__MAX_BATCH_SIZE: 8
-      
+      RUST_LOG: "debug"
+
   inference-api:
     image: "ghcr.io/huggingface/text-embeddings-inference:cpu-1.8"
     ports:
