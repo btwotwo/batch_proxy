@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use log::info;
 use tokio::sync::mpsc;
@@ -8,25 +8,30 @@ use uuid::Uuid;
 use crate::{
     api_client::{ApiClient, EmbedApiRequest},
     config::BatchConfiguration,
-    request::{EmbedRequestClient, EmbedRequestGroupingParams},
+    request::{Caller, EmbedRequestCaller, EmbedRequestGroupingParams},
 };
 
-use super::batch_worker::{self, EmbedApiBatchWorkerHandle};
+use super::batch_worker::{self, BatchWorkerHandle};
 
-struct BatchManager<TApiClient: ApiClient> {
-    workers: HashMap<EmbedRequestGroupingParams, EmbedApiBatchWorkerHandle>,
+struct BatchManager<TApiClient, TCaller, TGroupingParams>
+where
+    TApiClient: ApiClient,
+    TCaller: Caller,
+    TGroupingParams: Hash,
+{
+    workers: HashMap<TGroupingParams, BatchWorkerHandle<TCaller>>,
     api_client: Arc<TApiClient>,
     batch_config: BatchConfiguration,
 
-    receiver: mpsc::Receiver<BatchManagerMessage>,
+    receiver: mpsc::Receiver<BatchManagerMessage<TCaller, TGroupingParams>>,
 }
 
 #[derive(Clone)]
-pub struct BatchManagerHandle {
-    sender: mpsc::Sender<BatchManagerMessage>,
+pub struct EmbedApiBatchManagerHandler {
+    sender: mpsc::Sender<BatchManagerMessage<EmbedRequestCaller, EmbedRequestGroupingParams>>,
 }
 
-impl BatchManagerHandle {
+impl EmbedApiBatchManagerHandler {
     pub async fn call_batched_embed(
         &self,
         mut api_request: EmbedApiRequest,
@@ -41,31 +46,38 @@ impl BatchManagerHandle {
             truncation_direction: api_request.truncation_direction,
         };
 
-        let client_id = Uuid::new_v4();
+        let caller_id = Uuid::new_v4();
+
         info!(
-            "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",
-            request_data, request_params, client_id
+            "Adding request from the caller to batcher. [input = {:?}, params = {:?}, caller_id = {:?}]",
+            request_data, request_params, caller_id
         );
 
-        let (result, client) = EmbedRequestClient::new(request_data, client_id);
+        let (result, caller) = EmbedRequestCaller::new(request_data, caller_id);
         self.sender
-            .send(BatchManagerMessage::NewRequest(client, request_params))
+            .send(BatchManagerMessage::NewRequest(caller, request_params))
             .await?;
+
         result.await?
     }
 }
 
-enum BatchManagerMessage {
-    NewRequest(EmbedRequestClient, EmbedRequestGroupingParams),
+enum BatchManagerMessage<TCaller, TGroupingParams> {
+    NewRequest(TCaller, TGroupingParams),
 }
 
-impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
+impl<TApiClient, TCaller, TGroupingParams> BatchManager<TApiClient, TCaller, TGroupingParams>
+where
+    TApiClient: ApiClient + 'static,
+    TCaller: Caller,
+    TGroupingParams: Hash + Clone + Eq,
+{
     // TODO: Periodical cleanup of workers?
-    fn handle_messages(&mut self, message: BatchManagerMessage) {
+    fn handle_messages(&mut self, message: BatchManagerMessage<TCaller, TGroupingParams>) {
         match message {
-            BatchManagerMessage::NewRequest(client, req_params) => {
+            BatchManagerMessage::NewRequest(caller, req_params) => {
                 let worker = self.workers.entry(req_params.clone()).or_insert_with(|| {
-                    batch_worker::start(
+                    batch_worker::start_worker(
                         Arc::clone(&self.api_client),
                         req_params,
                         &self.batch_config,
@@ -73,17 +85,17 @@ impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
                     )
                 });
 
-                worker.put_request(client);
+                worker.put_request(caller);
             }
         }
     }
 }
 
-pub fn start<TApiClient: ApiClient + 'static>(
+pub fn start_embed_api_batch_manager<TApiClient: ApiClient + 'static>(
     api_client: TApiClient,
     batch_config: BatchConfiguration,
-) -> BatchManagerHandle {
-    let (sender, receiver) = mpsc::channel::<BatchManagerMessage>(64);
+) -> EmbedApiBatchManagerHandler {
+    let (sender, receiver) = mpsc::channel::<BatchManagerMessage<EmbedRequestCaller, EmbedRequestGroupingParams>>(64);
     let mut manager = BatchManager {
         workers: HashMap::new(),
         api_client: Arc::new(api_client),
@@ -97,5 +109,5 @@ pub fn start<TApiClient: ApiClient + 'static>(
         }
     });
 
-    BatchManagerHandle { sender }
+    EmbedApiBatchManagerHandler { sender }
 }

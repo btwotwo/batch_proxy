@@ -1,12 +1,12 @@
-use crate::request::Request;
+use crate::request::Caller;
 
-pub struct RequestStore<TRequest: Request> {
+pub struct RequestStore<TRequest: Caller> {
     pending_requests: Vec<TRequest>,
     current_batch_size: usize,
     max_batch_size: usize,
 }
 
-impl<TRequest: Request> RequestStore<TRequest> {
+impl<TRequest: Caller> RequestStore<TRequest> {
     pub fn new(max_batch_size: usize) -> Self {
         Self {
             pending_requests: Vec::new(),
@@ -52,15 +52,27 @@ impl<TRequest: Request> RequestStore<TRequest> {
 
 #[cfg(test)]
 mod tests {
-    use crate::request::Request;
+    use uuid::Uuid;
+
+    use crate::request::Caller;
 
     use super::*;
     const MOCK_DATA_COUNT: usize = 2;
 
     struct MockRequest;
-    impl Request for MockRequest {
+    impl Caller for MockRequest {
+        type ExpectedResult = ();
+
         fn data_count(&self) -> usize {
             MOCK_DATA_COUNT
+        }
+
+        fn caller_id(&self) -> uuid::Uuid {
+            Uuid::new_v4()
+        }
+
+        fn reply_handle(self) -> crate::request::ReplyHandle<Self::ExpectedResult> {
+            todo!()
         }
     }
 

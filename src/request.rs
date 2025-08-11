@@ -4,8 +4,11 @@ use uuid::Uuid;
 
 use crate::api_client::EmbedApiRequestInputs;
 
-pub trait Request {
+pub trait Caller: Send {
+    type ExpectedResult;
     fn data_count(&self) -> usize;
+    fn caller_id(&self) -> Uuid;
+    fn reply_handle(self) -> ReplyHandle<Self::ExpectedResult>;
 }
 
 /// This struct represents request parameters that are used to group similar requests together
@@ -18,15 +21,15 @@ pub struct EmbedRequestGroupingParams {
     pub truncation_direction: Option<String>,
 }
 
-pub struct EmbedRequestClient {
-    pub reply_handle: EmbedRequestHandle,
+pub struct EmbedRequestCaller {
+    pub reply_handle: ReplyHandle<Vec<Vec<f64>>>,
     pub request_data: Vec<String>,
 }
 
-impl EmbedRequestClient {
+impl EmbedRequestCaller {
     pub fn new(
         request_inputs: EmbedApiRequestInputs,
-        client_id: Uuid,
+        caller_id: Uuid,
     ) -> (oneshot::Receiver<anyhow::Result<Vec<Vec<f64>>>>, Self) {
         let (sender, receiver) = oneshot::channel();
         let request_data = match request_inputs {
@@ -36,32 +39,32 @@ impl EmbedRequestClient {
 
         (
             receiver,
-            EmbedRequestClient {
+            EmbedRequestCaller {
                 request_data,
-                reply_handle: EmbedRequestHandle {
+                reply_handle: ReplyHandle {
                     reply_handle: sender,
-                    client_id,
+                    caller_id
                 },
             },
         )
     }
 
-    pub fn client_id(&self) -> Uuid {
-        self.reply_handle.client_id
+    pub fn caller_id(&self) -> Uuid {
+        self.reply_handle.caller_id
     }
 }
 
-pub struct EmbedRequestHandle {
-    pub reply_handle: oneshot::Sender<anyhow::Result<Vec<Vec<f64>>>>,
-    pub client_id: Uuid,
+pub struct ReplyHandle<TResult> {
+    pub reply_handle: oneshot::Sender<anyhow::Result<TResult>>,
+    pub caller_id: Uuid,
 }
 
-impl EmbedRequestHandle {
-    pub fn reply_with_result(self, result: Vec<Vec<f64>>) {
+impl<TResult> ReplyHandle<TResult> {
+    pub fn reply_with_result(self, result: TResult) {
         self.reply_handle.send(Ok(result)).unwrap_or_else(|_| {
             error!(
-                "Could not send response to client, receiver has dropped. [ClientId = {0}]",
-                self.client_id
+                "Could not send response to caller, receiver has dropped. [CallerId = {0}]",
+                self.caller_id
             )
         });
     }
@@ -69,15 +72,25 @@ impl EmbedRequestHandle {
     pub fn reply_with_error(self, error: anyhow::Error) {
         self.reply_handle.send(Err(error)).unwrap_or_else(|_| {
             error!(
-                "Could not send response to client, receiver has dropped. [ClientId = {0}]",
-                self.client_id
+                "Could not send response to caller, receiver has dropped. [CallerId = {0}]",
+                self.caller_id
             )
         });
     }
 }
 
-impl Request for EmbedRequestClient {
+impl Caller for EmbedRequestCaller {
+    type ExpectedResult = Vec<Vec<f64>>;
+
     fn data_count(&self) -> usize {
         self.request_data.len()
+    }
+
+    fn caller_id(&self) -> Uuid {
+        self.reply_handle.caller_id
+    }
+
+    fn reply_handle(self) -> ReplyHandle<Self::ExpectedResult> {
+        self.reply_handle
     }
 }

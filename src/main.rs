@@ -1,6 +1,6 @@
 use actix_web::{App, HttpServer, post, web};
 use api_client::EmbedApiRequest;
-use batch::batch_manager::BatchManagerHandle;
+use batch::batch_manager::EmbedApiBatchManagerHandler;
 use config::BatchConfiguration;
 
 mod api_client;
@@ -10,7 +10,7 @@ mod request;
 
 #[post("/embed")]
 async fn embed(
-    batch_manager: web::Data<BatchManagerHandle>,
+    batch_manager: web::Data<EmbedApiBatchManagerHandler>,
     req: web::Json<EmbedApiRequest>,
 ) -> actix_web::Result<String> {
     let result = batch_manager
@@ -27,7 +27,7 @@ async fn embed(
 async fn main() -> std::io::Result<()> {
     colog::init();
     let api_client = api_client::ReqwestApiClient::new("http://localhost:8080").unwrap();
-    let batch_manager = web::Data::new(batch::batch_manager::start(
+    let batch_manager = web::Data::new(batch::batch_manager::start_embed_api_batch_manager(
         api_client,
         BatchConfiguration {
             max_waiting_time_ms: 5000,
