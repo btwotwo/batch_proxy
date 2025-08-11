@@ -1,0 +1,15 @@
+services:
+  proxy:
+    build: .
+    ports:
+      - "8081:8081"
+
+  inference-api:
+    image: "ghcr.io/huggingface/text-embeddings-inference:cpu-1.8"
+    ports:
+      - "8080:80"
+    volumes:
+      - "./text-embeddings-data:/data"
+    environment:
+      MODEL_ID: "nomic-ai/nomic-embed-text-v1.5"
+
