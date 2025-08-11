@@ -40,7 +40,7 @@ impl Settings {
             .add_source(File::with_name("settings.local").required(false))
             .add_source(Environment::with_prefix("batch_proxy").separator("__"))
             .build()?;
-        
+
         info!("Loaded settings. {:?}", s);
         s.try_deserialize()
     }

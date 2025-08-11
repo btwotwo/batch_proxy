@@ -24,12 +24,14 @@ impl<TApiClient: ApiClient + 'static, TGroupingParams>
     }
 }
 
-impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGroupingParams> {
-    pub fn execute_embed_request(
-        &self,
-        current_batch_size: usize,
-        requests: Vec<EmbedRequestClient>,
-    ) {
+pub trait GenericRequestExecutor<TRequestClient> {
+    fn execute_request(&self, current_batch_size: usize, requests: Vec<TRequestClient>);
+}
+
+impl<TApiClient: ApiClient + 'static> GenericRequestExecutor<EmbedRequestClient>
+    for RequestExecutor<TApiClient, EmbedRequestGroupingParams>
+{
+    fn execute_request(&self, current_batch_size: usize, requests: Vec<EmbedRequestClient>) {
         let request_parameters = Arc::clone(&self.request_parameters);
         let api_client = Arc::clone(&self.api_client);
 
@@ -72,5 +74,14 @@ impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGr
                 }
             }
         });
+    }
+}
+
+impl<TApiClient: ApiClient + 'static> RequestExecutor<TApiClient, EmbedRequestGroupingParams> {
+    pub fn execute_embed_request(
+        &self,
+        current_batch_size: usize,
+        requests: Vec<EmbedRequestClient>,
+    ) {
     }
 }

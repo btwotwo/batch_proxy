@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 use crate::{
     api_client::{ApiClient, EmbedApiRequest},
-    settings::BatchSettings,
     request::{EmbedRequestClient, EmbedRequestGroupingParams},
+    settings::BatchSettings,
 };
 
 use super::batch_worker::{self, EmbedApiBatchWorkerHandle};
@@ -42,6 +42,7 @@ impl BatchManagerHandle {
         };
 
         let client_id = Uuid::new_v4();
+
         info!(
             "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",
             request_data, request_params, client_id
@@ -65,10 +66,13 @@ impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
         match message {
             BatchManagerMessage::NewRequest(client, req_params) => {
                 let worker = self.workers.entry(req_params.clone()).or_insert_with(|| {
+                    let worker_id = Uuid::new_v4();
+                    info!("Starting new worker. [parameters = {req_params:#?}, worker_id = {worker_id}");
                     batch_worker::start(
                         Arc::clone(&self.api_client),
                         req_params,
                         &self.batch_config,
+                        worker_id,
                         CancellationToken::new(),
                     )
                 });
@@ -99,4 +103,3 @@ pub fn start<TApiClient: ApiClient + 'static>(
 
     BatchManagerHandle { sender }
 }
-

@@ -5,8 +5,8 @@ use settings::{BatchSettings, Settings};
 
 mod api_client;
 mod batch;
-mod settings;
 mod request;
+mod settings;
 
 #[post("/embed")]
 async fn embed(
