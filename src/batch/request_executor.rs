@@ -13,8 +13,9 @@ pub struct RequestExecutor<TApiClient: ApiClient, TGroupingParams> {
     api_client: Arc<TApiClient>,
 }
 
-impl<TApiClient: ApiClient + 'static, TGroupingParams>
-    RequestExecutor<TApiClient, TGroupingParams>
+impl<TApiClient, TGroupingParams> RequestExecutor<TApiClient, TGroupingParams>
+where
+    TApiClient: ApiClient,
 {
     pub fn new(api_client: Arc<TApiClient>, request_parameters: TGroupingParams) -> Self {
         Self {
@@ -28,8 +29,10 @@ pub trait GenericRequestExecutor<TRequestClient> {
     fn execute_request(&self, current_batch_size: usize, requests: Vec<TRequestClient>);
 }
 
-impl<TApiClient: ApiClient + 'static> GenericRequestExecutor<EmbedRequestClient>
+impl<TApiClient> GenericRequestExecutor<EmbedRequestClient>
     for RequestExecutor<TApiClient, EmbedRequestGroupingParams>
+where
+    TApiClient: ApiClient + 'static,
 {
     fn execute_request(&self, current_batch_size: usize, requests: Vec<EmbedRequestClient>) {
         let request_parameters = Arc::clone(&self.request_parameters);
