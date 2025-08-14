@@ -127,7 +127,7 @@ pub fn start(
     worker_id: Uuid,
     cancellation_token: CancellationToken,
 ) -> EmbedApiBatchWorkerHandle {
-    let (sender, receiver) = mpsc::channel::<BatchWorkerMessage>(64);
+    let (sender, receiver) = mpsc::channel::<BatchWorkerMessage>(2048);
     let request_executor = RequestExecutor::new(api_client, api_parameters);
     let request_store = RequestStore::new(batch_config.max_batch_size);
 

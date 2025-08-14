@@ -90,7 +90,7 @@ pub fn start<TApiClient: ApiClient + 'static>(
     api_client: TApiClient,
     batch_config: BatchSettings,
 ) -> BatchManagerHandle {
-    let (sender, receiver) = mpsc::channel::<BatchManagerMessage>(64);
+    let (sender, receiver) = mpsc::channel::<BatchManagerMessage>(2048);
     let mut manager = BatchManager {
         workers: HashMap::new(),
         api_client: Arc::new(api_client),
