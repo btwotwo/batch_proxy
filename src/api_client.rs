@@ -49,19 +49,21 @@ pub struct EmbedApiRequest {
 }
 
 #[async_trait]
-pub trait ApiClient: Send + Sync {
+pub trait ApiClient: Send + Sync + 'static {
     async fn call_embed(&self, request: &EmbedApiRequest) -> ApiClientResult<Vec<Vec<f64>>>;
 }
 
 pub struct ReqwestApiClient {
-    base_url: Url,
+    embed_url: String,
     pub client: reqwest::Client,
 }
 
 impl ReqwestApiClient {
     pub fn new(base_url: &str) -> anyhow::Result<Self> {
+        let base_url = Url::parse(base_url)?;
+
         Ok(Self {
-            base_url: Url::parse(base_url)?,
+            embed_url: base_url.join("/embed")?.to_string(),
             client: reqwest::Client::new(),
         })
     }
@@ -70,10 +72,9 @@ impl ReqwestApiClient {
 #[async_trait]
 impl ApiClient for ReqwestApiClient {
     async fn call_embed(&self, request: &EmbedApiRequest) -> ApiClientResult<Vec<Vec<f64>>> {
-        let target_url = self.base_url.join("/embed").expect("Always valid");
         let result_string = self
             .client
-            .post(target_url)
+            .post(&self.embed_url)
             .json(&request)
             .send()
             .await?
