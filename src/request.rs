@@ -8,6 +8,20 @@ pub trait Request {
     fn data_count(&self) -> usize;
 }
 
+
+pub trait RequestClient<I, O> {
+    fn reply_with_result(self, result: O);
+    fn reply_with_error(self, error: anyhow::Error);
+
+    fn client_id(&self) -> Uuid;
+    fn data_count(&self) -> usize;
+}
+
+pub struct RequestHandle<O> {
+    pub reply_handle: oneshot::Sender<anyhow::Result<O>>,
+    pub client_id: Uuid,
+}
+
 /// This struct represents request parameters that are used to group similar requests together
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct EmbedRequestGroupingParams {
