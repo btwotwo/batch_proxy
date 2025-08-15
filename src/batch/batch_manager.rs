@@ -13,7 +13,6 @@ use crate::{
 
 use super::batch_worker::{self, EmbedApiBatchWorkerHandle};
 
-
 struct BatchManager<TApiClient: ApiClient> {
     workers: HashMap<EmbedRequestGroupingParams, EmbedApiBatchWorkerHandle>,
     api_client: Arc<TApiClient>,
@@ -33,14 +32,17 @@ enum BatchManagerMessageV2<TApiEndpoint: ApiEndpont> {
     NewRequest(RequestClient<TApiEndpoint>, TApiEndpoint::GroupingParams),
 }
 
-
 pub struct BatchManagerHandleV2<TApiEndpoint: ApiEndpont> {
-    sender: mpsc::Sender<BatchManagerMessageV2<TApiEndpoint>>
+    sender: mpsc::Sender<BatchManagerMessageV2<TApiEndpoint>>,
 }
 
 impl<TApiEndpoint: ApiEndpont> BatchManagerHandleV2<TApiEndpoint> {
-    pub async fn call_api(&self, api_request: TApiEndpoint::ApiRequest) -> anyhow::Result<Vec<TApiEndpoint::ApiResponseItem>> {
-        let (data, grouping_params) = TApiEndpoint::GroupingParams::decompose_api_request(api_request);
+    pub async fn call_api(
+        &self,
+        api_request: TApiEndpoint::ApiRequest,
+    ) -> anyhow::Result<Vec<TApiEndpoint::ApiResponseItem>> {
+        let (data, grouping_params) =
+            TApiEndpoint::GroupingParams::decompose_api_request(api_request);
         let client_id = Uuid::new_v4();
         info!(
             "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",

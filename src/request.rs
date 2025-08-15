@@ -22,12 +22,15 @@ impl<TApiEndpoint: ApiEndpont> RequestClient<TApiEndpoint> {
     pub fn new(
         data: Vec<TApiEndpoint::DataItem>,
         client_id: Uuid,
-    )-> (oneshot::Receiver<anyhow::Result<Vec<TApiEndpoint::ApiResponseItem>>>, Self) {
+    ) -> (
+        oneshot::Receiver<anyhow::Result<Vec<TApiEndpoint::ApiResponseItem>>>,
+        Self,
+    ) {
         let (sender, receiver) = oneshot::channel();
         let client = RequestClient {
             handle: RequestHandle {
                 client_id,
-                reply_handle: sender
+                reply_handle: sender,
             },
             data,
         };
@@ -83,7 +86,7 @@ impl GroupingParams for EmbedRequestGroupingParams {
             truncate,
             truncation_direction,
         } = api_request;
-        
+
         let request_data = match inputs {
             EmbedApiRequestInputs::Str(input) => vec![input],
             EmbedApiRequestInputs::Vec(inputs) => inputs,

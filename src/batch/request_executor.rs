@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use log::error;
 
@@ -34,7 +34,11 @@ struct ApiBatchExecutor<TApiClient: ApiClient> {
 #[async_trait]
 impl<TApiClient: ApiClient> BatchExecutor<EmbedApiEndpoint> for ApiBatchExecutor<TApiClient> {
     async fn execute_batch(&self, batch: Batch<EmbedApiEndpoint>) {
-        let response = self.api_client.call_embed(&batch.api_parameters).await.context("Failed call to /embed");
+        let response = self
+            .api_client
+            .call_embed(&batch.api_parameters)
+            .await
+            .context("Failed call to /embed");
         distribute_response(response, batch.clients);
     }
 }
