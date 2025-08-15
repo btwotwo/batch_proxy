@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use log::error;
@@ -5,6 +7,8 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use thiserror::Error;
+
+use crate::request::{EmbedRequestGroupingParams, GroupingParams};
 
 pub type ApiClientResult<T> = Result<T, ApiClientError>;
 
@@ -48,12 +52,28 @@ pub struct EmbedApiRequest {
     pub truncation_direction: Option<String>,
 }
 
-
-#[async_trait]
-pub trait ApiClient: Send + Sync + 'static + Clone {
-    async fn call_embed(&self, request: &EmbedApiRequest) -> ApiClientResult<Vec<Vec<f64>>>;
+pub trait ApiEndpont: 'static {
+    type ApiRequest: Send + Sync + Debug;
+    type ApiResponseItem: Send + Sync + Debug;
+    type DataItem: Send + Sync + Debug;
+    type GroupingParams: Send
+        + GroupingParams<DataItem = Self::DataItem, ApiRequest = Self::ApiRequest>
+        + Debug;
 }
 
+pub struct EmbedApiEndpoint;
+
+impl ApiEndpont for EmbedApiEndpoint {
+    type ApiRequest = EmbedApiRequest;
+    type ApiResponseItem = Vec<f64>;
+    type DataItem = String;
+    type GroupingParams = EmbedRequestGroupingParams;
+}
+
+#[async_trait]
+pub trait ApiClient: Send + Sync + 'static {
+    async fn call_embed(&self, request: &EmbedApiRequest) -> ApiClientResult<Vec<Vec<f64>>>;
+}
 
 pub struct ReqwestApiClient {
     embed_url: String,

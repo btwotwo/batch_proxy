@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use log::info;
 use tokio::sync::mpsc;
@@ -6,12 +6,13 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    api_client::{ApiClient, EmbedApiRequest},
-    request::{BatchableRequest, EmbedRequestClient, EmbedRequestGroupingParams},
+    api_client::{ApiClient, ApiEndpont, EmbedApiEndpoint, EmbedApiRequest},
+    request::{EmbedRequestClient, EmbedRequestGroupingParams, GroupingParams, RequestClient},
     settings::BatchSettings,
 };
 
 use super::batch_worker::{self, EmbedApiBatchWorkerHandle};
+
 
 struct BatchManager<TApiClient: ApiClient> {
     workers: HashMap<EmbedRequestGroupingParams, EmbedApiBatchWorkerHandle>,
@@ -21,11 +22,37 @@ struct BatchManager<TApiClient: ApiClient> {
     receiver: mpsc::Receiver<BatchManagerMessage>,
 }
 
-struct BatchManagerV2<TReq>
+struct BatchManagerV2<G>
 where
-    TReq: BatchableRequest,
+    G: GroupingParams,
 {
-    workers: HashMap<TReq::GroupingKey, EmbedApiBatchWorkerHandle>,
+    workers: HashMap<G, EmbedApiBatchWorkerHandle>,
+}
+
+enum BatchManagerMessageV2<TApiEndpoint: ApiEndpont> {
+    NewRequest(RequestClient<TApiEndpoint>, TApiEndpoint::GroupingParams),
+}
+
+
+pub struct BatchManagerHandleV2<TApiEndpoint: ApiEndpont> {
+    sender: mpsc::Sender<BatchManagerMessageV2<TApiEndpoint>>
+}
+
+impl<TApiEndpoint: ApiEndpont> BatchManagerHandleV2<TApiEndpoint> {
+    pub async fn call_api(&self, api_request: TApiEndpoint::ApiRequest) -> anyhow::Result<Vec<TApiEndpoint::ApiResponseItem>> {
+        let (data, grouping_params) = TApiEndpoint::GroupingParams::decompose_api_request(api_request);
+        let client_id = Uuid::new_v4();
+        info!(
+            "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",
+            data, grouping_params, client_id
+        );
+        let (receiver, client) = RequestClient::new(data, client_id);
+        self.sender
+            .send(BatchManagerMessageV2::NewRequest(client, grouping_params))
+            .await?;
+
+        receiver.await?
+    }
 }
 
 #[derive(Clone)]
