@@ -39,11 +39,10 @@ impl Settings {
             .add_source(Environment::with_prefix("batch_proxy").separator("__"))
             .build()?;
 
-
         let settings = s.try_deserialize()?;
-        
+
         info!("Loaded settings. {:#?}", settings);
-        
+
         Ok(settings)
     }
 }

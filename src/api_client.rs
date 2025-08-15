@@ -48,10 +48,12 @@ pub struct EmbedApiRequest {
     pub truncation_direction: Option<String>,
 }
 
+
 #[async_trait]
-pub trait ApiClient: Send + Sync + 'static {
+pub trait ApiClient: Send + Sync + 'static + Clone {
     async fn call_embed(&self, request: &EmbedApiRequest) -> ApiClientResult<Vec<Vec<f64>>>;
 }
+
 
 pub struct ReqwestApiClient {
     embed_url: String,

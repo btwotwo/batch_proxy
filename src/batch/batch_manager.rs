@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     api_client::{ApiClient, EmbedApiRequest},
-    request::{EmbedRequestClient, EmbedRequestGroupingParams},
+    request::{BatchableRequest, EmbedRequestClient, EmbedRequestGroupingParams},
     settings::BatchSettings,
 };
 
@@ -19,6 +19,13 @@ struct BatchManager<TApiClient: ApiClient> {
     batch_config: BatchSettings,
 
     receiver: mpsc::Receiver<BatchManagerMessage>,
+}
+
+struct BatchManagerV2<TReq>
+where
+    TReq: BatchableRequest,
+{
+    workers: HashMap<TReq::GroupingKey, EmbedApiBatchWorkerHandle>,
 }
 
 #[derive(Clone)]

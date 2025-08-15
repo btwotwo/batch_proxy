@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use log::error;
 use tokio::sync::oneshot;
 use uuid::Uuid;
@@ -8,18 +10,20 @@ pub trait Request {
     fn data_count(&self) -> usize;
 }
 
-
-pub trait RequestClient<I, O> {
-    fn reply_with_result(self, result: O);
-    fn reply_with_error(self, error: anyhow::Error);
-
-    fn client_id(&self) -> Uuid;
-    fn data_count(&self) -> usize;
+pub struct RequestClient<I, O> {
+    pub handle: RequestHandle<O>,
+    pub data: Vec<I>,
 }
 
 pub struct RequestHandle<O> {
-    pub reply_handle: oneshot::Sender<anyhow::Result<O>>,
+    pub reply_handle: oneshot::Sender<anyhow::Result<Vec<O>>>,
     pub client_id: Uuid,
+}
+
+pub trait GroupingParams<I> {
+    type ApiRequest;
+
+    fn to_request(&self, data: Vec<I>) -> Self::ApiRequest;
 }
 
 /// This struct represents request parameters that are used to group similar requests together
@@ -72,6 +76,26 @@ pub struct EmbedRequestHandle {
 
 impl EmbedRequestHandle {
     pub fn reply_with_result(self, result: Vec<Vec<f64>>) {
+        self.reply_handle.send(Ok(result)).unwrap_or_else(|_| {
+            error!(
+                "Could not send response to client, receiver has dropped. [ClientId = {0}]",
+                self.client_id
+            )
+        });
+    }
+
+    pub fn reply_with_error(self, error: anyhow::Error) {
+        self.reply_handle.send(Err(error)).unwrap_or_else(|_| {
+            error!(
+                "Could not send response to client, receiver has dropped. [ClientId = {0}]",
+                self.client_id
+            )
+        });
+    }
+}
+
+impl<O> RequestHandle<O> {
+    pub fn reply_with_result(self, result: Vec<O>) {
         self.reply_handle.send(Ok(result)).unwrap_or_else(|_| {
             error!(
                 "Could not send response to client, receiver has dropped. [ClientId = {0}]",

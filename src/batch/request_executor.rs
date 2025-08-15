@@ -5,8 +5,54 @@ use log::error;
 
 use crate::{
     api_client::{ApiClient, EmbedApiRequest, EmbedApiRequestInputs},
-    request::{EmbedRequestClient, EmbedRequestGroupingParams},
+    request::{
+        EmbedRequestClient, EmbedRequestGroupingParams, GroupingParams, RequestClient,
+        RequestHandle,
+    },
 };
+
+struct BatchedClient<O> {
+    request_size: usize,
+    request_handle: RequestHandle<O>,
+}
+
+struct Batch<TApiRequest, O> {
+    clients: Vec<BatchedClient<O>>,
+    api_parameters: TApiRequest,
+}
+
+trait BatchExecutor {
+    type ApiRequest;
+    type ApiResponse;
+
+    fn execute_batch(batch: Batch<Self::ApiRequest, Self::ApiResponse>);
+}
+
+fn batch_requests<I, O, G: GroupingParams<I>>(
+    current_batch_size: usize,
+    request_clients: RequestClient<I, O>,
+    grouping_params: G
+) {
+    let mut inputs = Vec::with_capacity(current_batch_size);
+    let mut clients = Vec::with_capacity(request_clients.len());
+
+    for client in request_clients {
+        let request_size = client.data.len();
+        let request_handle = client.handle;
+        inputs.extend(client.data);
+        clients.push(BatchedClient {
+            request_size,
+            request_handle,
+        });
+    }
+
+    let api_parameters = grouping_params.to_request(inputs);
+
+    Batch {
+        clients,
+        api_parameters,
+    }
+}
 
 pub struct RequestExecutor<TApiClient: ApiClient, TGroupingParams> {
     request_parameters: Arc<TGroupingParams>,

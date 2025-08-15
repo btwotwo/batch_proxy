@@ -131,8 +131,7 @@ pub fn start(
     let request_executor = RequestExecutor::new(api_client, api_parameters);
     let request_store = RequestStore::new(batch_config.max_batch_size);
 
-    let worker =
-        EmbedApiBatchWorker::new(request_store, request_executor, receiver, worker_id);
+    let worker = EmbedApiBatchWorker::new(request_store, request_executor, receiver, worker_id);
     let flush_wait_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
 
     tokio::spawn(async move {
