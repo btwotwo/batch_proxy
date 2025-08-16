@@ -2,7 +2,7 @@
 target_port = 8081
 
 [inference_api]
-target_url = "https://localhost:8080"
+target_url = "http://localhost:8080"
 
 [batch]
 max_batch_size = 8
