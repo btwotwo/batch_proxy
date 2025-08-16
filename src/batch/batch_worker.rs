@@ -3,32 +3,34 @@ use std::{sync::Arc, time::Duration};
 use anyhow::anyhow;
 use log::{error, info};
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    api_client::ApiClient,
-    request::{EmbedRequestClient, EmbedRequestGroupingParams},
+    api::endpoint::ApiEndpont, batch::batch_executor, request::RequestClient,
     settings::BatchSettings,
 };
 
-use super::{
-    request_executor::{GenericRequestExecutor, RequestExecutor},
-    request_store::RequestStore,
-};
+use super::{DataProvider, request_store::RequestStoreV2};
 
-enum BatchWorkerMessage {
-    NewRequest(EmbedRequestClient),
+enum BatchWorkerMessage<TApiEndpoint: ApiEndpont> {
+    NewRequest(RequestClient<TApiEndpoint>),
 }
 
-#[derive(Clone)]
-pub struct EmbedApiBatchWorkerHandle {
-    sender: mpsc::Sender<BatchWorkerMessage>,
+pub struct BatchWorker<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>> {
+    request_store: RequestStoreV2<TApiEndpoint>,
+    batch_executor: Arc<TBatchExecutor>,
+    receiver: mpsc::Receiver<BatchWorkerMessage<TApiEndpoint>>,
+    worker_id: Uuid,
+    grouping_params: Arc<TApiEndpoint::GroupingParams>,
+}
+
+pub struct BatchWorkerHandle<TApiEndpoint: ApiEndpont> {
+    sender: mpsc::Sender<BatchWorkerMessage<TApiEndpoint>>,
     worker_id: Uuid,
 }
 
-impl EmbedApiBatchWorkerHandle {
-    pub fn put_request(&self, req: EmbedRequestClient) {
+impl<TApiEndpoint: ApiEndpont> BatchWorkerHandle<TApiEndpoint> {
+    pub fn put_request(&self, req: RequestClient<TApiEndpoint>) {
         let sender = self.sender.clone();
         let worker_id = self.worker_id;
 
@@ -43,7 +45,7 @@ impl EmbedApiBatchWorkerHandle {
 
                     match err.0 {
                         BatchWorkerMessage::NewRequest(req) => {
-                            req.reply_handle.reply_with_error(anyhow!(
+                            req.handle.reply_with_error(anyhow!(
                                 "Could not process request, please try again."
                             ));
                         }
@@ -53,36 +55,9 @@ impl EmbedApiBatchWorkerHandle {
     }
 }
 
-pub struct EmbedApiBatchWorker<TRequestExecutor: GenericRequestExecutor<EmbedRequestClient>> {
-    request_store: RequestStore<EmbedRequestClient>,
-    request_executor: TRequestExecutor,
-    receiver: mpsc::Receiver<BatchWorkerMessage>,
-    worker_id: Uuid,
-}
-
-impl<TApiExecutor: GenericRequestExecutor<EmbedRequestClient> + 'static>
-    EmbedApiBatchWorker<TApiExecutor>
+impl<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>>
+    BatchWorker<TApiEndpoint, TBatchExecutor>
 {
-    fn new(
-        request_store: RequestStore<EmbedRequestClient>,
-        request_executor: TApiExecutor,
-        receiver: mpsc::Receiver<BatchWorkerMessage>,
-        worker_id: Uuid,
-    ) -> Self {
-        Self {
-            request_store,
-            request_executor,
-            worker_id,
-            receiver,
-        }
-    }
-
-    fn handle_message(&mut self, message: BatchWorkerMessage) {
-        match message {
-            BatchWorkerMessage::NewRequest(req) => self.handle_new_request(req),
-        }
-    }
-
     fn flush_batch(&mut self) {
         if self.request_store.is_empty() {
             return;
@@ -90,23 +65,26 @@ impl<TApiExecutor: GenericRequestExecutor<EmbedRequestClient> + 'static>
 
         let (current_batch_size, requests) = self.request_store.drain();
 
-        let client_ids: Vec<_> = requests.iter().map(|r| r.client_id()).collect();
+        let client_ids: Vec<_> = requests.iter().map(|r| r.handle.client_id).collect();
 
         info!(
             "Flushing requests from clients. [worker_id={:#?}, client_ids = {:#?}]",
             self.worker_id, client_ids
         );
 
-        self.request_executor
-            .execute_request(current_batch_size, requests);
+        let executor = Arc::clone(&self.batch_executor);
+        let grouping_params = Arc::clone(&self.grouping_params);
+
+        tokio::spawn(async move {
+            batch_executor::execute_batch(executor, grouping_params, requests, current_batch_size)
+                .await
+        });
     }
 
-    // Message handlers
-    fn handle_new_request(&mut self, req: EmbedRequestClient) {
+    fn handle_new_request(&mut self, req: RequestClient<TApiEndpoint>) {
         info!(
             "Accepted request from client. [worker_id={:#?}, client_id = {}]",
-            self.worker_id,
-            req.client_id()
+            self.worker_id, req.handle.client_id
         );
 
         if let Some(req) = self.request_store.try_store(req) {
@@ -118,34 +96,43 @@ impl<TApiExecutor: GenericRequestExecutor<EmbedRequestClient> + 'static>
             self.request_store.force_store(req);
         }
     }
+
+    fn handle_message(&mut self, message: BatchWorkerMessage<TApiEndpoint>) {
+        match message {
+            BatchWorkerMessage::NewRequest(req) => self.handle_new_request(req),
+        }
+    }
 }
 
-pub fn start(
-    api_client: Arc<impl ApiClient + 'static>,
-    api_parameters: EmbedRequestGroupingParams,
+pub fn start<TApiEndpoint, TBatchExecutor>(
+    grouping_params: Arc<TApiEndpoint::GroupingParams>,
     batch_config: &BatchSettings,
     worker_id: Uuid,
-    cancellation_token: CancellationToken,
-) -> EmbedApiBatchWorkerHandle {
-    let (sender, receiver) = mpsc::channel::<BatchWorkerMessage>(2048);
-    let request_executor = RequestExecutor::new(api_client, api_parameters);
-    let request_store = RequestStore::new(batch_config.max_batch_size);
-
-    let worker =
-        EmbedApiBatchWorker::new(request_store, request_executor, receiver, worker_id);
+    batch_executor: Arc<TBatchExecutor>,
+) -> BatchWorkerHandle<TApiEndpoint>
+where
+    TApiEndpoint: ApiEndpont,
+    TBatchExecutor: DataProvider<TApiEndpoint>,
+{
+    let (sender, receiver) = mpsc::channel(2048);
     let flush_wait_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
 
-    tokio::spawn(async move {
-        run_worker(worker, flush_wait_duration, cancellation_token).await;
-    });
+    let worker = BatchWorker {
+        request_store: RequestStoreV2::new(batch_config.max_batch_size),
+        batch_executor,
+        receiver,
+        worker_id,
+        grouping_params,
+    };
 
-    EmbedApiBatchWorkerHandle { sender, worker_id }
+    tokio::spawn(async move { run_worker(worker, flush_wait_duration).await });
+
+    BatchWorkerHandle { sender, worker_id }
 }
 
-async fn run_worker(
-    mut worker: EmbedApiBatchWorker<impl GenericRequestExecutor<EmbedRequestClient> + 'static>,
+async fn run_worker<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>>(
+    mut worker: BatchWorker<TApiEndpoint, TBatchExecutor>,
     flush_wait_duration: Duration,
-    cancellation_token: CancellationToken,
 ) {
     loop {
         tokio::select! {
@@ -162,11 +149,6 @@ async fn run_worker(
             _ = tokio::time::sleep(flush_wait_duration) => {
                 worker.flush_batch();
             },
-            _ = cancellation_token.cancelled() => {
-                info!("Flusing batch and stopping worker.");
-                worker.flush_batch();
-                break;
-            }
         }
     }
 }

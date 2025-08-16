@@ -2,104 +2,85 @@ use std::{collections::HashMap, sync::Arc};
 
 use log::info;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    api_client::{ApiClient, EmbedApiRequest},
-    request::{EmbedRequestClient, EmbedRequestGroupingParams},
+    api::endpoint::ApiEndpont, api::endpoint::GroupingParams, request::RequestClient,
     settings::BatchSettings,
 };
 
-use super::batch_worker::{self, EmbedApiBatchWorkerHandle};
+use super::{DataProvider, batch_worker::BatchWorkerHandle};
 
-struct BatchManager<TApiClient: ApiClient> {
-    workers: HashMap<EmbedRequestGroupingParams, EmbedApiBatchWorkerHandle>,
-    api_client: Arc<TApiClient>,
+struct BatchManager<TApiEndpoint: ApiEndpont, TExecutor: DataProvider<TApiEndpoint>> {
+    workers: HashMap<TApiEndpoint::GroupingParams, BatchWorkerHandle<TApiEndpoint>>,
+    batch_executor: Arc<TExecutor>,
     batch_config: BatchSettings,
-
-    receiver: mpsc::Receiver<BatchManagerMessage>,
 }
 
-#[derive(Clone)]
-pub struct BatchManagerHandle {
-    sender: mpsc::Sender<BatchManagerMessage>,
-}
-
-impl BatchManagerHandle {
-    pub async fn call_batched_embed(
-        &self,
-        mut api_request: EmbedApiRequest,
-    ) -> anyhow::Result<Vec<Vec<f64>>> {
-        let request_data = std::mem::take(&mut api_request.inputs);
-
-        let request_params = EmbedRequestGroupingParams {
-            truncate: api_request.truncate,
-            normalize: api_request.normalize,
-            dimensions: api_request.dimensions,
-            prompt_name: api_request.prompt_name,
-            truncation_direction: api_request.truncation_direction,
-        };
-
-        let client_id = Uuid::new_v4();
-
-        info!(
-            "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",
-            request_data, request_params, client_id
-        );
-
-        let (result, client) = EmbedRequestClient::new(request_data, client_id);
-        self.sender
-            .send(BatchManagerMessage::NewRequest(client, request_params))
-            .await?;
-        result.await?
-    }
-}
-
-enum BatchManagerMessage {
-    NewRequest(EmbedRequestClient, EmbedRequestGroupingParams),
-}
-
-impl<TApiClient: ApiClient + 'static> BatchManager<TApiClient> {
-    // TODO: Periodical cleanup of workers?
-    fn handle_messages(&mut self, message: BatchManagerMessage) {
+impl<TApiEndpoint: ApiEndpont, TExecutor: DataProvider<TApiEndpoint>>
+    BatchManager<TApiEndpoint, TExecutor>
+{
+    fn handle_messages(&mut self, message: BatchManagerMessage<TApiEndpoint>) {
         match message {
-            BatchManagerMessage::NewRequest(client, req_params) => {
-                let worker = self.workers.entry(req_params.clone()).or_insert_with(|| {
+            BatchManagerMessage::NewRequest(req, grouping_params) => {
+                let worker = self.workers.entry(grouping_params).or_insert_with_key(|grouping_params| {
                     let worker_id = Uuid::new_v4();
-                    
-                    info!("Starting new worker. [parameters = {req_params:#?}, worker_id = {worker_id}");
-                    
-                    batch_worker::start(
-                        Arc::clone(&self.api_client),
-                        req_params,
-                        &self.batch_config,
-                        worker_id,
-                        // TODO: Use cancellation token for graceful shutdown
-                        CancellationToken::new(),
-                    )
+
+                    info!("Starting new worker. [parameters = {grouping_params:#?}, worker_id = {worker_id}");
+                    super::batch_worker::start(Arc::new(grouping_params.clone()), &self.batch_config, worker_id, Arc::clone(&self.batch_executor))
                 });
 
-                worker.put_request(client);
+                worker.put_request(req);
             }
         }
     }
 }
 
-pub fn start<TApiClient: ApiClient + 'static>(
-    api_client: TApiClient,
+enum BatchManagerMessage<TApiEndpoint: ApiEndpont> {
+    NewRequest(RequestClient<TApiEndpoint>, TApiEndpoint::GroupingParams),
+}
+
+pub struct BatchManagerHandle<TApiEndpoint: ApiEndpont> {
+    sender: mpsc::Sender<BatchManagerMessage<TApiEndpoint>>,
+}
+
+impl<TApiEndpoint: ApiEndpont> BatchManagerHandle<TApiEndpoint> {
+    pub async fn call_api(
+        &self,
+        api_request: TApiEndpoint::ApiRequest,
+    ) -> anyhow::Result<Vec<TApiEndpoint::ApiResponseItem>> {
+        let (data, grouping_params) =
+            TApiEndpoint::GroupingParams::decompose_api_request(api_request);
+
+        let client_id = Uuid::new_v4();
+
+        info!(
+            "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",
+            data, grouping_params, client_id
+        );
+        let (receiver, client) = RequestClient::new(data, client_id);
+
+        self.sender
+            .send(BatchManagerMessage::NewRequest(client, grouping_params))
+            .await?;
+
+        receiver.await?
+    }
+}
+
+pub fn start<TApiEndpoint: ApiEndpont>(
+    batch_executor: Arc<impl DataProvider<TApiEndpoint>>,
     batch_config: BatchSettings,
-) -> BatchManagerHandle {
-    let (sender, receiver) = mpsc::channel::<BatchManagerMessage>(2048);
+) -> BatchManagerHandle<TApiEndpoint> {
+    let (sender, mut receiver) = mpsc::channel::<BatchManagerMessage<TApiEndpoint>>(2048);
     let mut manager = BatchManager {
         workers: HashMap::new(),
-        api_client: Arc::new(api_client),
-        receiver,
+        batch_executor,
         batch_config,
     };
 
     tokio::spawn(async move {
-        while let Some(msg) = manager.receiver.recv().await {
+        while let Some(msg) = receiver.recv().await {
             manager.handle_messages(msg);
         }
     });

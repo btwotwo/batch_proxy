@@ -16,4 +16,20 @@ services:
       - "./text-embeddings-data:/data"
     environment:
       MODEL_ID: "nomic-ai/nomic-embed-text-v1.5"
+      
+  inference-api-gpu:
+    image: "ghcr.io/huggingface/text-embeddings-inference:turing-1.8"
+    ports:
+      - "8080:80"
+    volumes:
+      - "./text-embeddings-data:/data"
+    environment:
+      MODEL_ID: "nomic-ai/nomic-embed-text-v1.5"
+    deploy:             
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
 
