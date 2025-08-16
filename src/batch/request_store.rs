@@ -68,11 +68,11 @@ mod tests {
 
         type ApiRequest = ();
 
-        fn to_request(&self, data: Vec<Self::DataItem>) -> Self::ApiRequest {
+        fn to_request(&self, _data: Vec<Self::DataItem>) -> Self::ApiRequest {
             todo!()
         }
 
-        fn decompose_api_request(api_request: Self::ApiRequest) -> (Vec<Self::DataItem>, Self) {
+        fn decompose_api_request(_api_request: Self::ApiRequest) -> (Vec<Self::DataItem>, Self) {
             todo!()
         }
     }
@@ -90,7 +90,7 @@ mod tests {
     }
 
     #[test]
-    fn given_request__when_retrieved__should_give_correct_data_count() {
+    fn given_request_when_retrieved_should_give_correct_data_count() {
         let client = client(12);
         let mut store = RequestStoreV2::new(2);
         store.force_store(client);
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn given_request__when_stored__should_return_request_if_larger_than_configured_max() {
+    fn given_request_when_stored_should_return_request_if_larger_than_configured_max() {
         let client = client(2);
         let mut store = RequestStoreV2::new(1);
         let result = store.try_store(client);

@@ -4,10 +4,6 @@ use uuid::Uuid;
 
 use crate::api::endpoint::ApiEndpont;
 
-pub trait Request {
-    fn data_count(&self) -> usize;
-}
-
 pub struct RequestClient<TApiEndpoint>
 where
     TApiEndpoint: ApiEndpont,
@@ -41,8 +37,6 @@ pub struct RequestHandle<O> {
     pub reply_handle: oneshot::Sender<anyhow::Result<Vec<O>>>,
     pub client_id: Uuid,
 }
-
-/// This struct represents request parameters that are used to group similar requests together
 
 impl<O> RequestHandle<O> {
     pub fn reply_with_result(self, result: Vec<O>) {
