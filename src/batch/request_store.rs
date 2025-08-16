@@ -1,9 +1,65 @@
-use crate::request::Request;
+use crate::{
+    api_client::ApiEndpont,
+    request::{Request, RequestClient},
+};
 
 pub struct RequestStore<TRequest: Request> {
     pending_requests: Vec<TRequest>,
     current_batch_size: usize,
     max_batch_size: usize,
+}
+
+pub struct RequestStoreV2<TApiEndpoint: ApiEndpont> {
+    pending_requests: Vec<RequestClient<TApiEndpoint>>,
+    current_batch_size: usize,
+    max_batch_size: usize,
+}
+
+impl<TApiEndpoint: ApiEndpont> RequestStoreV2<TApiEndpoint> {
+    pub fn new(max_batch_size: usize) -> Self {
+        Self {
+            pending_requests: Vec::new(),
+            current_batch_size: 0,
+            max_batch_size,
+        }
+    }
+
+    /// Tries to store request, returns it back if maximum batch size has been reached.
+    pub fn try_store(
+        &mut self,
+        req: RequestClient<TApiEndpoint>,
+    ) -> Option<RequestClient<TApiEndpoint>> {
+        let data_count = req.data.len();
+
+        if self.current_batch_size + data_count > self.max_batch_size {
+            return Some(req);
+        }
+
+        self.current_batch_size += data_count;
+        self.pending_requests.push(req);
+
+        None
+    }
+
+    /// Stores request ignoring the maximum batch size setting.
+    pub fn force_store(&mut self, req: RequestClient<TApiEndpoint>) {
+        let data_count = req.data.len();
+
+        self.current_batch_size += data_count;
+        self.pending_requests.push(req);
+    }
+
+    /// Empties the store, returning stored requests and current batch size.
+    pub fn drain(&mut self) -> (usize, Vec<RequestClient<TApiEndpoint>>) {
+        let requests = std::mem::take(&mut self.pending_requests);
+        let current_batch_size = std::mem::take(&mut self.current_batch_size);
+
+        (current_batch_size, requests)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.pending_requests.is_empty()
+    }
 }
 
 impl<TRequest: Request> RequestStore<TRequest> {

@@ -58,6 +58,9 @@ pub trait ApiEndpont: 'static {
     type DataItem: Send + Sync + Debug;
     type GroupingParams: Send
         + GroupingParams<DataItem = Self::DataItem, ApiRequest = Self::ApiRequest>
+        + std::hash::Hash
+        + Eq
+        + Clone
         + Debug;
 }
 

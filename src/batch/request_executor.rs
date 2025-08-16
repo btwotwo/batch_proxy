@@ -17,18 +17,18 @@ struct BatchedClient<TApiEndpoint: ApiEndpont> {
     request_handle: RequestHandle<TApiEndpoint::ApiResponseItem>,
 }
 
-struct Batch<TApiEndpoint: ApiEndpont> {
+pub struct Batch<TApiEndpoint: ApiEndpont> {
     clients: Vec<BatchedClient<TApiEndpoint>>,
     api_parameters: TApiEndpoint::ApiRequest,
 }
 
 #[async_trait]
-trait BatchExecutor<TApiEndpoint: ApiEndpont> {
+pub trait BatchExecutor<TApiEndpoint: ApiEndpont>: Send + Sync + 'static {
     async fn execute_batch(&self, batch: Batch<TApiEndpoint>);
 }
 
-struct ApiBatchExecutor<TApiClient: ApiClient> {
-    api_client: TApiClient,
+pub struct ApiBatchExecutor<TApiClient: ApiClient> {
+    pub api_client: TApiClient,
 }
 
 #[async_trait]
@@ -37,16 +37,16 @@ impl<TApiClient: ApiClient> BatchExecutor<EmbedApiEndpoint> for ApiBatchExecutor
         let response = self
             .api_client
             .call_embed(&batch.api_parameters)
-            .await
-            .context("Failed call to /embed");
+            .await.map_err(Into::into);
+        
         distribute_response(response, batch.clients);
     }
 }
 
-fn batch_requests<TApiEndpoint>(
+pub fn batch_requests<TApiEndpoint>(
     current_batch_size: usize,
     request_clients: Vec<RequestClient<TApiEndpoint>>,
-    grouping_params: TApiEndpoint::GroupingParams,
+    grouping_params: &TApiEndpoint::GroupingParams,
 ) -> Batch<TApiEndpoint>
 where
     TApiEndpoint: ApiEndpont,
