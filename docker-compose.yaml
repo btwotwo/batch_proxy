@@ -25,6 +25,8 @@ services:
       - "./text-embeddings-data:/data"
     environment:
       MODEL_ID: "nomic-ai/nomic-embed-text-v1.5"
+      DTYPE: "float16"
+      MAX_BATCH_TOKENS: 8192
     deploy:             
       resources:
         reservations:
