@@ -1,49 +1,44 @@
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use log::error;
 
 use crate::{
-    api_client::{ApiClient, ApiEndpont, EmbedApiEndpoint, EmbedApiRequest, EmbedApiRequestInputs},
-    request::{
-        EmbedRequestClient, EmbedRequestGroupingParams, GroupingParams, RequestClient,
-        RequestHandle,
-    },
+    api::endpoint::{ApiEndpont, GroupingParams},
+    request::{RequestClient, RequestHandle},
 };
 
-struct BatchedClient<TApiEndpoint: ApiEndpont> {
-    request_size: usize,
-    request_handle: RequestHandle<TApiEndpoint::ApiResponseItem>,
-}
+use super::DataProvider;
 
 pub struct Batch<TApiEndpoint: ApiEndpont> {
     clients: Vec<BatchedClient<TApiEndpoint>>,
     api_parameters: TApiEndpoint::ApiRequest,
 }
 
-#[async_trait]
-pub trait BatchExecutor<TApiEndpoint: ApiEndpont>: Send + Sync + 'static {
-    async fn execute_batch(&self, batch: Batch<TApiEndpoint>);
+struct BatchedClient<TApiEndpoint: ApiEndpont> {
+    request_size: usize,
+    request_handle: RequestHandle<TApiEndpoint::ApiResponseItem>,
 }
 
-pub struct ApiBatchExecutor<TApiClient: ApiClient> {
-    pub api_client: TApiClient,
-}
-
-#[async_trait]
-impl<TApiClient: ApiClient> BatchExecutor<EmbedApiEndpoint> for ApiBatchExecutor<TApiClient> {
-    async fn execute_batch(&self, batch: Batch<EmbedApiEndpoint>) {
-        let response = self
-            .api_client
-            .call_embed(&batch.api_parameters)
-            .await.map_err(Into::into);
-        
-        distribute_response(response, batch.clients);
+impl<TApiEndpoint: ApiEndpont> Batch<TApiEndpoint> {
+    pub fn api_parameters(&self) -> &TApiEndpoint::ApiRequest {
+        &self.api_parameters
     }
 }
 
-pub fn batch_requests<TApiEndpoint>(
+pub async fn execute_batch<TApiEndpoint: ApiEndpont, TDataProvider: DataProvider<TApiEndpoint>>(
+    data_provider: Arc<TDataProvider>,
+    grouping_params: Arc<TApiEndpoint::GroupingParams>,
+    request_clients: Vec<RequestClient<TApiEndpoint>>,
+    current_batch_size: usize,
+) {
+    let batch = batch_requests(current_batch_size, request_clients, &grouping_params);
+    let data = data_provider.get_response(&batch).await;
+    distribute_response(data, batch);
+}
+
+fn batch_requests<TApiEndpoint>(
     current_batch_size: usize,
     request_clients: Vec<RequestClient<TApiEndpoint>>,
     grouping_params: &TApiEndpoint::GroupingParams,
@@ -74,8 +69,9 @@ where
 
 fn distribute_response<TApiEndpoint: ApiEndpont>(
     response: anyhow::Result<Vec<TApiEndpoint::ApiResponseItem>>,
-    batched_clients: Vec<BatchedClient<TApiEndpoint>>,
+    batch: Batch<TApiEndpoint>,
 ) {
+    let batched_clients = batch.clients;
     match response {
         Ok(result) => {
             let mut result_iterator = result.into_iter();
@@ -97,4 +93,3 @@ fn distribute_response<TApiEndpoint: ApiEndpont>(
         }
     }
 }
-

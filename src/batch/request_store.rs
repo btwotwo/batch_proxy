@@ -1,7 +1,4 @@
-use crate::{
-    api_client::ApiEndpont,
-    request::{Request, RequestClient},
-};
+use crate::{api::endpoint::ApiEndpont, request::RequestClient};
 
 pub struct RequestStoreV2<TApiEndpoint: ApiEndpont> {
     pending_requests: Vec<RequestClient<TApiEndpoint>>,
@@ -58,10 +55,11 @@ impl<TApiEndpoint: ApiEndpont> RequestStoreV2<TApiEndpoint> {
 
 #[cfg(test)]
 mod tests {
-    use uuid::{timestamp::UUID_TICKS_BETWEEN_EPOCHS, Uuid};
+    use uuid::Uuid;
+
+    use crate::api::endpoint::GroupingParams;
 
     use super::*;
-    use crate::request::{GroupingParams, Request};
     struct TestApiEndpoint;
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     struct TestGroupingParams;
@@ -78,7 +76,7 @@ mod tests {
             todo!()
         }
     }
-    
+
     impl ApiEndpont for TestApiEndpoint {
         type ApiRequest = ();
         type ApiResponseItem = ();

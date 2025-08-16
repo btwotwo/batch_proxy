@@ -5,33 +5,29 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
-    api_client::{ApiClient, ApiEndpont},
-    request::{GroupingParams, RequestClient},
+    api::endpoint::ApiEndpont, api::endpoint::GroupingParams, request::RequestClient,
     settings::BatchSettings,
 };
 
-use super::{
-    batch_workerv2::{BatchWorkerV2, BatchWorkerV2Handle},
-    request_executor::BatchExecutor,
-};
+use super::{DataProvider, batch_worker::BatchWorkerHandle};
 
-struct BatchManagerV2<TApiEndpoint: ApiEndpont, TExecutor: BatchExecutor<TApiEndpoint>> {
-    workers: HashMap<TApiEndpoint::GroupingParams, BatchWorkerV2Handle<TApiEndpoint>>,
+struct BatchManager<TApiEndpoint: ApiEndpont, TExecutor: DataProvider<TApiEndpoint>> {
+    workers: HashMap<TApiEndpoint::GroupingParams, BatchWorkerHandle<TApiEndpoint>>,
     batch_executor: Arc<TExecutor>,
     batch_config: BatchSettings,
 }
 
-impl<TApiEndpoint: ApiEndpont, TExecutor: BatchExecutor<TApiEndpoint>>
-    BatchManagerV2<TApiEndpoint, TExecutor>
+impl<TApiEndpoint: ApiEndpont, TExecutor: DataProvider<TApiEndpoint>>
+    BatchManager<TApiEndpoint, TExecutor>
 {
-    fn handle_messages(&mut self, message: BatchManagerMessageV2<TApiEndpoint>) {
+    fn handle_messages(&mut self, message: BatchManagerMessage<TApiEndpoint>) {
         match message {
-            BatchManagerMessageV2::NewRequest(req, grouping_params) => {
+            BatchManagerMessage::NewRequest(req, grouping_params) => {
                 let worker = self.workers.entry(grouping_params).or_insert_with_key(|grouping_params| {
                     let worker_id = Uuid::new_v4();
 
                     info!("Starting new worker. [parameters = {grouping_params:#?}, worker_id = {worker_id}");
-                    super::batch_workerv2::start(Arc::new(grouping_params.clone()), &self.batch_config, worker_id, Arc::clone(&self.batch_executor))
+                    super::batch_worker::start(Arc::new(grouping_params.clone()), &self.batch_config, worker_id, Arc::clone(&self.batch_executor))
                 });
 
                 worker.put_request(req);
@@ -40,15 +36,15 @@ impl<TApiEndpoint: ApiEndpont, TExecutor: BatchExecutor<TApiEndpoint>>
     }
 }
 
-enum BatchManagerMessageV2<TApiEndpoint: ApiEndpont> {
+enum BatchManagerMessage<TApiEndpoint: ApiEndpont> {
     NewRequest(RequestClient<TApiEndpoint>, TApiEndpoint::GroupingParams),
 }
 
-pub struct BatchManagerHandleV2<TApiEndpoint: ApiEndpont> {
-    sender: mpsc::Sender<BatchManagerMessageV2<TApiEndpoint>>,
+pub struct BatchManagerHandle<TApiEndpoint: ApiEndpont> {
+    sender: mpsc::Sender<BatchManagerMessage<TApiEndpoint>>,
 }
 
-impl<TApiEndpoint: ApiEndpont> BatchManagerHandleV2<TApiEndpoint> {
+impl<TApiEndpoint: ApiEndpont> BatchManagerHandle<TApiEndpoint> {
     pub async fn call_api(
         &self,
         api_request: TApiEndpoint::ApiRequest,
@@ -65,7 +61,7 @@ impl<TApiEndpoint: ApiEndpont> BatchManagerHandleV2<TApiEndpoint> {
         let (receiver, client) = RequestClient::new(data, client_id);
 
         self.sender
-            .send(BatchManagerMessageV2::NewRequest(client, grouping_params))
+            .send(BatchManagerMessage::NewRequest(client, grouping_params))
             .await?;
 
         receiver.await?
@@ -73,11 +69,11 @@ impl<TApiEndpoint: ApiEndpont> BatchManagerHandleV2<TApiEndpoint> {
 }
 
 pub fn start<TApiEndpoint: ApiEndpont>(
-    batch_executor: Arc<impl BatchExecutor<TApiEndpoint>>,
+    batch_executor: Arc<impl DataProvider<TApiEndpoint>>,
     batch_config: BatchSettings,
-) -> BatchManagerHandleV2<TApiEndpoint> {
-    let (sender, mut receiver) = mpsc::channel::<BatchManagerMessageV2<TApiEndpoint>>(2048);
-    let mut manager = BatchManagerV2 {
+) -> BatchManagerHandle<TApiEndpoint> {
+    let (sender, mut receiver) = mpsc::channel::<BatchManagerMessage<TApiEndpoint>>(2048);
+    let mut manager = BatchManager {
         workers: HashMap::new(),
         batch_executor,
         batch_config,
@@ -89,5 +85,5 @@ pub fn start<TApiEndpoint: ApiEndpont>(
         }
     });
 
-    BatchManagerHandleV2 { sender }
+    BatchManagerHandle { sender }
 }

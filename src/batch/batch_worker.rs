@@ -6,42 +6,37 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
-    api_client::{ApiClient, ApiEndpont},
-    batch::request_executor,
-    request::{GroupingParams, RequestClient},
+    api::endpoint::ApiEndpont, batch::batch_executor, request::RequestClient,
     settings::BatchSettings,
 };
 
-use super::{
-    request_executor::{ApiBatchExecutor, BatchExecutor},
-    request_store::RequestStoreV2,
-};
+use super::{DataProvider, request_store::RequestStoreV2};
 
-enum BatchWorkerMessageV2<TApiEndpoint: ApiEndpont> {
+enum BatchWorkerMessage<TApiEndpoint: ApiEndpont> {
     NewRequest(RequestClient<TApiEndpoint>),
 }
 
-pub struct BatchWorkerV2<TApiEndpoint: ApiEndpont, TBatchExecutor: BatchExecutor<TApiEndpoint>> {
+pub struct BatchWorker<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>> {
     request_store: RequestStoreV2<TApiEndpoint>,
     batch_executor: Arc<TBatchExecutor>,
-    receiver: mpsc::Receiver<BatchWorkerMessageV2<TApiEndpoint>>,
+    receiver: mpsc::Receiver<BatchWorkerMessage<TApiEndpoint>>,
     worker_id: Uuid,
     grouping_params: Arc<TApiEndpoint::GroupingParams>,
 }
 
-pub struct BatchWorkerV2Handle<TApiEndpoint: ApiEndpont> {
-    sender: mpsc::Sender<BatchWorkerMessageV2<TApiEndpoint>>,
+pub struct BatchWorkerHandle<TApiEndpoint: ApiEndpont> {
+    sender: mpsc::Sender<BatchWorkerMessage<TApiEndpoint>>,
     worker_id: Uuid,
 }
 
-impl<TApiEndpoint: ApiEndpont> BatchWorkerV2Handle<TApiEndpoint> {
+impl<TApiEndpoint: ApiEndpont> BatchWorkerHandle<TApiEndpoint> {
     pub fn put_request(&self, req: RequestClient<TApiEndpoint>) {
         let sender = self.sender.clone();
         let worker_id = self.worker_id;
 
         tokio::spawn(async move {
             sender
-                .send(BatchWorkerMessageV2::NewRequest(req))
+                .send(BatchWorkerMessage::NewRequest(req))
                 .await
                 .unwrap_or_else(|err| {
                     error!(
@@ -49,7 +44,7 @@ impl<TApiEndpoint: ApiEndpont> BatchWorkerV2Handle<TApiEndpoint> {
                     );
 
                     match err.0 {
-                        BatchWorkerMessageV2::NewRequest(req) => {
+                        BatchWorkerMessage::NewRequest(req) => {
                             req.handle.reply_with_error(anyhow!(
                                 "Could not process request, please try again."
                             ));
@@ -60,8 +55,8 @@ impl<TApiEndpoint: ApiEndpont> BatchWorkerV2Handle<TApiEndpoint> {
     }
 }
 
-impl<TApiEndpoint: ApiEndpont, TBatchExecutor: BatchExecutor<TApiEndpoint>>
-    BatchWorkerV2<TApiEndpoint, TBatchExecutor>
+impl<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>>
+    BatchWorker<TApiEndpoint, TBatchExecutor>
 {
     fn flush_batch(&mut self) {
         if self.request_store.is_empty() {
@@ -77,11 +72,13 @@ impl<TApiEndpoint: ApiEndpont, TBatchExecutor: BatchExecutor<TApiEndpoint>>
             self.worker_id, client_ids
         );
 
-        let batch =
-            request_executor::batch_requests(current_batch_size, requests, &self.grouping_params);
         let executor = Arc::clone(&self.batch_executor);
+        let grouping_params = Arc::clone(&self.grouping_params);
 
-        tokio::spawn(async move { executor.execute_batch(batch).await });
+        tokio::spawn(async move {
+            batch_executor::execute_batch(executor, grouping_params, requests, current_batch_size)
+                .await
+        });
     }
 
     fn handle_new_request(&mut self, req: RequestClient<TApiEndpoint>) {
@@ -100,9 +97,9 @@ impl<TApiEndpoint: ApiEndpont, TBatchExecutor: BatchExecutor<TApiEndpoint>>
         }
     }
 
-    fn handle_message(&mut self, message: BatchWorkerMessageV2<TApiEndpoint>) {
+    fn handle_message(&mut self, message: BatchWorkerMessage<TApiEndpoint>) {
         match message {
-            BatchWorkerMessageV2::NewRequest(req) => self.handle_new_request(req),
+            BatchWorkerMessage::NewRequest(req) => self.handle_new_request(req),
         }
     }
 }
@@ -112,15 +109,15 @@ pub fn start<TApiEndpoint, TBatchExecutor>(
     batch_config: &BatchSettings,
     worker_id: Uuid,
     batch_executor: Arc<TBatchExecutor>,
-) -> BatchWorkerV2Handle<TApiEndpoint>
+) -> BatchWorkerHandle<TApiEndpoint>
 where
     TApiEndpoint: ApiEndpont,
-    TBatchExecutor: BatchExecutor<TApiEndpoint>,
+    TBatchExecutor: DataProvider<TApiEndpoint>,
 {
     let (sender, receiver) = mpsc::channel(2048);
     let flush_wait_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
 
-    let worker = BatchWorkerV2 {
+    let worker = BatchWorker {
         request_store: RequestStoreV2::new(batch_config.max_batch_size),
         batch_executor,
         receiver,
@@ -130,11 +127,11 @@ where
 
     tokio::spawn(async move { run_worker(worker, flush_wait_duration).await });
 
-    BatchWorkerV2Handle { sender, worker_id }
+    BatchWorkerHandle { sender, worker_id }
 }
 
-async fn run_worker<TApiEndpoint: ApiEndpont, TBatchExecutor: BatchExecutor<TApiEndpoint>>(
-    mut worker: BatchWorkerV2<TApiEndpoint, TBatchExecutor>,
+async fn run_worker<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>>(
+    mut worker: BatchWorker<TApiEndpoint, TBatchExecutor>,
     flush_wait_duration: Duration,
 ) {
     loop {

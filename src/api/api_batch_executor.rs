@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     api::{client::ApiClient, endpoint::embed_endpoint::EmbedApiEndpoint},
-    batch::request_executor::{Batch, DataProvider},
+    batch::{Batch, DataProvider},
 };
 
 pub struct ApiBatchExecutor<TApiClient: ApiClient> {
