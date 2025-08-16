@@ -3,12 +3,6 @@ use crate::{
     request::{Request, RequestClient},
 };
 
-pub struct RequestStore<TRequest: Request> {
-    pending_requests: Vec<TRequest>,
-    current_batch_size: usize,
-    max_batch_size: usize,
-}
-
 pub struct RequestStoreV2<TApiEndpoint: ApiEndpont> {
     pending_requests: Vec<RequestClient<TApiEndpoint>>,
     current_batch_size: usize,
@@ -62,78 +56,57 @@ impl<TApiEndpoint: ApiEndpont> RequestStoreV2<TApiEndpoint> {
     }
 }
 
-impl<TRequest: Request> RequestStore<TRequest> {
-    pub fn new(max_batch_size: usize) -> Self {
-        Self {
-            pending_requests: Vec::new(),
-            current_batch_size: 0,
-            max_batch_size,
-        }
-    }
-
-    /// Tries to store request, returns it back if maximum batch size has been reached.
-    pub fn try_store(&mut self, req: TRequest) -> Option<TRequest> {
-        let data_count = req.data_count();
-
-        if self.current_batch_size + data_count > self.max_batch_size {
-            return Some(req);
-        }
-
-        self.current_batch_size += data_count;
-        self.pending_requests.push(req);
-
-        None
-    }
-
-    /// Stores request ignoring the maximum batch size setting.
-    pub fn force_store(&mut self, req: TRequest) {
-        let data_count = req.data_count();
-
-        self.current_batch_size += data_count;
-        self.pending_requests.push(req);
-    }
-
-    /// Empties the store, returning stored requests and current batch size.
-    pub fn drain(&mut self) -> (usize, Vec<TRequest>) {
-        let requests = std::mem::take(&mut self.pending_requests);
-        let current_batch_size = std::mem::take(&mut self.current_batch_size);
-
-        (current_batch_size, requests)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.pending_requests.is_empty()
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::request::Request;
+    use uuid::{timestamp::UUID_TICKS_BETWEEN_EPOCHS, Uuid};
 
     use super::*;
-    const MOCK_DATA_COUNT: usize = 2;
+    use crate::request::{GroupingParams, Request};
+    struct TestApiEndpoint;
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    struct TestGroupingParams;
+    impl GroupingParams for TestGroupingParams {
+        type DataItem = ();
 
-    struct MockRequest;
-    impl Request for MockRequest {
-        fn data_count(&self) -> usize {
-            MOCK_DATA_COUNT
+        type ApiRequest = ();
+
+        fn to_request(&self, data: Vec<Self::DataItem>) -> Self::ApiRequest {
+            todo!()
         }
+
+        fn decompose_api_request(api_request: Self::ApiRequest) -> (Vec<Self::DataItem>, Self) {
+            todo!()
+        }
+    }
+    
+    impl ApiEndpont for TestApiEndpoint {
+        type ApiRequest = ();
+        type ApiResponseItem = ();
+        type DataItem = ();
+        type GroupingParams = TestGroupingParams;
+    }
+
+    fn client(data_count: usize) -> RequestClient<TestApiEndpoint> {
+        let (_, client) = RequestClient::new(vec![(); data_count], Uuid::new_v4());
+        client
     }
 
     #[test]
     fn given_request__when_retrieved__should_give_correct_data_count() {
-        let mut store = RequestStore::<MockRequest>::new(2);
-        store.try_store(MockRequest);
+        let client = client(12);
+        let mut store = RequestStoreV2::new(2);
+        store.force_store(client);
 
         let (data_size, _) = store.drain();
 
-        assert_eq!(data_size, MOCK_DATA_COUNT)
+        assert_eq!(data_size, 12)
     }
 
     #[test]
     fn given_request__when_stored__should_return_request_if_larger_than_configured_max() {
-        let mut store = RequestStore::<MockRequest>::new(1);
-        let result = store.try_store(MockRequest);
+        let client = client(2);
+        let mut store = RequestStoreV2::new(1);
+        let result = store.try_store(client);
 
         assert!(result.is_some(), "Should return request back.");
 

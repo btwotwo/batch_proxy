@@ -11,7 +11,6 @@ use crate::{
 };
 
 use super::{
-    batch_worker::EmbedApiBatchWorkerHandle,
     batch_workerv2::{BatchWorkerV2, BatchWorkerV2Handle},
     request_executor::BatchExecutor,
 };

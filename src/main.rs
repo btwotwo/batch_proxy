@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use actix_web::{App, HttpServer, post, web};
 use api_client::{EmbedApiEndpoint, EmbedApiRequest};
-use batch::{batch_manager::BatchManagerHandle, batch_managerv2::{self, BatchManagerHandleV2}, request_executor::ApiBatchExecutor};
+use batch::{batch_managerv2::{self, BatchManagerHandleV2}, request_executor::ApiBatchExecutor};
 use settings::Settings;
 
 mod api_client;
