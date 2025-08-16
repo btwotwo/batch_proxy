@@ -5,5 +5,5 @@ target_port = 8081
 target_url = "http://localhost:8080"
 
 [batch]
-max_batch_size = 8
-max_waiting_time_ms = 500
+max_batch_size = 32
+max_waiting_time_ms = 50
