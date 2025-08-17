@@ -15,7 +15,7 @@ pub struct Batch<TApiEndpoint: ApiEndpont> {
     api_parameters: TApiEndpoint::ApiRequest,
 }
 
-pub struct BatchedClient<TApiEndpoint: ApiEndpont> {
+struct BatchedClient<TApiEndpoint: ApiEndpont> {
     request_size: usize,
     request_handle: RequestHandle<TApiEndpoint::ApiResponseItem>,
 }
