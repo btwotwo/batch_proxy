@@ -1,5 +1,8 @@
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+
+use crate::{api::{api_data_provider::ApiDataProvider, client::ApiClient}, batch::{Batch, DataProvider}};
 
 use super::{ApiEndpont, GroupingParams};
 
@@ -84,5 +87,14 @@ impl GroupingParams for EmbedRequestGroupingParams {
         };
 
         (request_data, request_params)
+    }
+}
+
+#[async_trait]
+impl<TApiClient: ApiClient> DataProvider<EmbedApiEndpoint> for ApiDataProvider<TApiClient> {
+    async fn get_data_for_batch(&self, batch: &Batch<EmbedApiEndpoint>) -> anyhow::Result<Vec<Vec<f64>>> {
+        let response = self.api_client.call_embed(batch.api_parameters()).await?;
+
+        Ok(response)
     }
 }

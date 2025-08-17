@@ -33,7 +33,7 @@ pub async fn execute_batch<TApiEndpoint: ApiEndpont, TDataProvider: DataProvider
     current_batch_size: usize,
 ) {
     let batch = batch_requests(current_batch_size, request_clients, &grouping_params);
-    let data = data_provider.get_response(&batch).await;
+    let data = data_provider.get_data_for_batch(&batch).await;
     distribute_response(data, batch);
 }
 

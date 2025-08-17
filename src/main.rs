@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use actix_web::{App, HttpServer, post, web};
 use api::{
-    api_batch_executor::ApiBatchExecutor,
+    api_data_provider::ApiDataProvider,
     client::reqwest_api_client::ReqwestApiClient,
     endpoint::embed_endpoint::{EmbedApiEndpoint, EmbedApiRequest},
 };
@@ -36,7 +36,7 @@ async fn main() -> std::io::Result<()> {
     let target_port = settings.api.target_port;
     let api_client = ReqwestApiClient::new(&settings.inference_api.target_url).unwrap();
 
-    let batch_executor = Arc::new(ApiBatchExecutor { api_client });
+    let batch_executor = Arc::new(ApiDataProvider { api_client });
 
     let batch_managerv2 = batch_manager::start(Arc::clone(&batch_executor), settings.batch.clone());
     let batch_manager_data = web::Data::new(batch_managerv2);

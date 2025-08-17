@@ -1,12 +1,12 @@
 use crate::{api::endpoint::ApiEndpont, request::RequestClient};
 
-pub struct RequestStoreV2<TApiEndpoint: ApiEndpont> {
+pub struct RequestStore<TApiEndpoint: ApiEndpont> {
     pending_requests: Vec<RequestClient<TApiEndpoint>>,
     current_batch_size: usize,
     max_batch_size: usize,
 }
 
-impl<TApiEndpoint: ApiEndpont> RequestStoreV2<TApiEndpoint> {
+impl<TApiEndpoint: ApiEndpont> RequestStore<TApiEndpoint> {
     pub fn new(max_batch_size: usize) -> Self {
         Self {
             pending_requests: Vec::new(),
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn given_request_when_retrieved_should_give_correct_data_count() {
         let client = client(12);
-        let mut store = RequestStoreV2::new(2);
+        let mut store = RequestStore::new(2);
         store.force_store(client);
 
         let (data_size, _) = store.drain();
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn given_request_when_stored_should_return_request_if_larger_than_configured_max() {
         let client = client(2);
-        let mut store = RequestStoreV2::new(1);
+        let mut store = RequestStore::new(1);
         let result = store.try_store(client);
 
         assert!(result.is_some(), "Should return request back.");

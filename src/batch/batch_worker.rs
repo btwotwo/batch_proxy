@@ -10,14 +10,14 @@ use crate::{
     settings::BatchSettings,
 };
 
-use super::{DataProvider, request_store::RequestStoreV2};
+use super::{DataProvider, request_store::RequestStore};
 
 enum BatchWorkerMessage<TApiEndpoint: ApiEndpont> {
     NewRequest(RequestClient<TApiEndpoint>),
 }
 
 pub struct BatchWorker<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>> {
-    request_store: RequestStoreV2<TApiEndpoint>,
+    request_store: RequestStore<TApiEndpoint>,
     batch_executor: Arc<TBatchExecutor>,
     receiver: mpsc::Receiver<BatchWorkerMessage<TApiEndpoint>>,
     worker_id: Uuid,
@@ -118,7 +118,7 @@ where
     let flush_wait_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
 
     let worker = BatchWorker {
-        request_store: RequestStoreV2::new(batch_config.max_batch_size),
+        request_store: RequestStore::new(batch_config.max_batch_size),
         batch_executor,
         receiver,
         worker_id,

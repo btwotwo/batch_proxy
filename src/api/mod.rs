@@ -1,3 +1,3 @@
-pub mod api_batch_executor;
+pub mod api_data_provider;
 pub mod client;
 pub mod endpoint;
