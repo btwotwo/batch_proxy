@@ -1,4 +1,3 @@
-
 use crate::api::client::ApiClient;
 
 pub struct ApiDataProvider<TApiClient: ApiClient> {

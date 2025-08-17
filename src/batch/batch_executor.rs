@@ -52,7 +52,7 @@ where
         let request_size = client.data.len();
         let request_handle = client.handle;
         inputs.extend(client.data);
-        
+
         clients.push(BatchedClient {
             request_size,
             request_handle,
