@@ -7,6 +7,7 @@ services:
       BATCH_PROXY__INFERENCE_API__TARGET_URL: "http://inference-api"
       BATCH_PROXY__BATCH__MAX_BATCH_SIZE: 8
       RUST_LOG: "debug"
+      
 
   inference-api:
     image: "ghcr.io/huggingface/text-embeddings-inference:cpu-1.8"
@@ -16,6 +17,8 @@ services:
       - "./text-embeddings-data:/data"
     environment:
       MODEL_ID: "nomic-ai/nomic-embed-text-v1.5"
+    profiles:
+      - cpu
       
   inference-api-gpu:
     image: "ghcr.io/huggingface/text-embeddings-inference:turing-1.8"
@@ -34,4 +37,6 @@ services:
           - driver: nvidia
             count: 1
             capabilities: [gpu]
+    profiles:
+      - gpu
 

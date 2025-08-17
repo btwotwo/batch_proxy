@@ -12,9 +12,10 @@ The proxy uses a lightweight actor model to manage shared state.
 
 *** Abstractions
 It is assumed that all requests that can be batched can be represented in the form of ~Vec<TReq>~,  and all of the responses will be in the form of ~Vec<TResp>~. That means that for the ~embed~ endpoint ~TReq=String~ and ~TRes=Vec<f64>~.
+
 To define a new endpoint, you will need to implement a type container trait called ~ApiEndpoint~ and define required types. In addition, you need to define ~GroupingParams~ for the common parameters that the request can be grouped on, and add the endpoint API call definition to the ~ApiClient~.
 
-You can take a look at the [[file:src/api/endpoint/embed_endpoint.rs][/embed endpoint]] for the example implementation.
+You can take a look at the [[file:src/api/endpoint/embed_endpoint.rs][/embed endpoint]] for an example implementation.
 
 ** Configuration  
 The proxy is configured via ~settings.toml~. Local development overrides can be placed in ~settings.local.toml~.  
@@ -27,106 +28,120 @@ Example: To override ~inference_api.target_url~, set:
 
 ** How to run  
 The proxy can be run with the included ~docker-compose.yml~.  
-Running ~docker compose up~ will start both the proxy and the underlying text inference API, which defaults to the ~nomic-ai/nomic-embed-text-v1.5~ model.  
+Running ~docker compose up --profile cpu~ will start both the proxy and the underlying text inference API, which defaults to the ~nomic-ai/nomic-embed-text-v1.5~ model.  
 
-To run only the proxy, disable the API container in ~docker-compose.yml~ (or use ~docker compose start proxy~) and configure the proxy to point to the correct API URL.  
+To run only the proxy, disable the API container use ~docker compose start proxy~ and configure the it to point to the correct API URL.
+
+In addition, you can use ~docker compose up --profile gpu~ to run the text inference api on you GPU.
 
 ** Benchmarks  
 Benchmarks were performed with the [[https://github.com/rakyll/hey][Hey]] load-testing tool.  
 
 Test command:  
-~hey -m POST -d '{"inputs": "Hello world!"}' -H "Content-Type: application/json" -n 1000 ${API}~  
-where ~API~ is set to either the proxy endpoint or the text inference API directly.  
+~hey -m POST -d '{"inputs": "hello"}' -H "Content-Type: application/json" -n 5000 ${API}~  
+where ~API~ is set to either the proxy endpoint or the text inference API directly.
+
+The GPU version of the text inference API was used, running on the NVIDIA RTX 2060 Super.
 
 *** Batch proxy  
-Settings: ~max_batch_size=8~, ~max_waiting_time=500ms~  
+Settings: ~max_batch_size=32~, ~max_waiting_time=8ms, RUST_LOG=error~
 #+begin_src
 Summary:
-  Total:	16.5318 secs
-  Slowest:	1.0362 secs
-  Fastest:	0.1543 secs
-  Average:	0.8013 secs
-  Requests/sec:	60.4896
+  Total:	3.8910 secs
+  Slowest:	0.0869 secs
+  Fastest:	0.0257 secs
+  Average:	0.0388 secs
+  Requests/sec:	1285.0072
 
-  Total data:	9541000 bytes
-  Size/request:	9541 bytes
+  Total data:	47605000 bytes
+  Size/request:	9521 bytes
 
 Response time histogram:
-  0.154 [1]	|
-  0.242 [7]	|■
-  0.331 [8]	|■
-  0.419 [0]	|
-  0.507 [8]	|■
-  0.595 [0]	|
-  0.683 [20]	|■■
-  0.772 [309]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-  0.860 [384]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-  0.948 [200]	|■■■■■■■■■■■■■■■■■■■■■
-  1.036 [63]	|■■■■■■■
+  0.026 [1]	|
+  0.032 [60]	|■
+  0.038 [2819]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.044 [1781]	|■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.050 [229]	|■■■
+  0.056 [64]	|■
+  0.062 [0]	|
+  0.069 [0]	|
+  0.075 [0]	|
+  0.081 [32]	|
+  0.087 [14]	|
 
 
 Latency distribution:
-  10% in 0.7255 secs
-  25% in 0.7533 secs
-  50% in 0.7967 secs
-  75% in 0.8620 secs
-  90% in 0.9107 secs
-  95% in 0.9637 secs
-  99% in 1.0097 secs
+  10% in 0.0356 secs
+  25% in 0.0365 secs
+  50% in 0.0376 secs
+  75% in 0.0401 secs
+  90% in 0.0430 secs
+  95% in 0.0451 secs
+  99% in 0.0541 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:	0.0000 secs, 0.0257 secs, 0.0869 secs
+  DNS-lookup:	0.0000 secs, 0.0000 secs, 0.0034 secs
+  req write:	0.0000 secs, 0.0000 secs, 0.0020 secs
+  resp wait:	0.0386 secs, 0.0257 secs, 0.0830 secs
+  resp read:	0.0001 secs, 0.0000 secs, 0.0015 secs
+
+Status code distribution:
+  [200]	5000 responses
 #+end_src  
 
 *** Text inference API  
 #+begin_src
 Summary:
-  Total:	16.7006 secs
-  Slowest:	1.0315 secs
-  Fastest:	0.0588 secs
-  Average:	0.8172 secs
-  Requests/sec:	59.8780
+  Total:	6.5275 secs
+  Slowest:	0.4035 secs
+  Fastest:	0.0063 secs
+  Average:	0.0641 secs
+  Requests/sec:	765.9908
 
-  Total data:	9541000 bytes
-  Size/request:	9541 bytes
+  Total data:	47605000 bytes
+  Size/request:	9521 bytes
 
 Response time histogram:
-  0.059 [1]	|
-  0.156 [1]	|
-  0.253 [8]	|■
-  0.351 [1]	|
-  0.448 [8]	|■
-  0.545 [9]	|■
-  0.642 [9]	|■
-  0.740 [48]	|■■■■
-  0.837 [519]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-  0.934 [288]	|■■■■■■■■■■■■■■■■■■■■■■
-  1.031 [108]	|■■■■■■■■
+  0.006 [1]	|
+  0.046 [4277]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.086 [40]	|
+  0.125 [1]	|
+  0.165 [91]	|■
+  0.205 [248]	|■■
+  0.245 [114]	|■
+  0.284 [35]	|
+  0.324 [123]	|■
+  0.364 [20]	|
+  0.403 [50]	|
 
 
 Latency distribution:
-  10% in 0.7491 secs
-  25% in 0.7727 secs
-  50% in 0.8167 secs
-  75% in 0.8744 secs
-  90% in 0.9382 secs
-  95% in 0.9722 secs
-  99% in 1.0152 secs
+  10% in 0.0358 secs
+  25% in 0.0368 secs
+  50% in 0.0379 secs
+  75% in 0.0405 secs
+  90% in 0.1837 secs
+  95% in 0.2354 secs
+  99% in 0.3920 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:	0.0000 secs, 0.0063 secs, 0.4035 secs
+  DNS-lookup:	0.0000 secs, 0.0000 secs, 0.0050 secs
+  req write:	0.0000 secs, 0.0000 secs, 0.0047 secs
+  resp wait:	0.0639 secs, 0.0062 secs, 0.4033 secs
+  resp read:	0.0001 secs, 0.0000 secs, 0.0030 secs
+
+Status code distribution:
+  [200]	5000 responses
 #+end_src  
 
 *** Summary
-As we can see, requests going through the batch proxy are slightly faster.
-In particular, a significant portion of requests completed in ~0.772 sec~, while the majority of requests to the text inference API completed in ~0.837 sec~.  
+As we can see, requests going through the batch proxy are faster. For example, the proxy request throughput is ~1285~ rps, while raw inference api is ~765~ rps.
+
+In addition, average response time for the raw inference API calls is ~0.641 seconds~, while the proxy response time is  ~0.388 seconds~.
 
 ** Improvement points  
-
-*** More abstractions  
-The current implementation is tightly coupled to the ~/embed~ endpoint, including its parameters and results.  
-For example:  
-- ~BatchWorker~ does not need to know which API it calls.  
-- ~RequestExecutor~ could be generalized by moving API-agnostic logic (e.g., splitting results and delivering them to clients) into a shared utility function.  
-
-*** More tests  
-The lack of abstraction makes the code harder to test, especially since it depends on I/O.  
-Introducing generic, decoupled components would make it easier to mock dependencies and test only the logic specific to each module.  
-
 *** Workers cleanup
 In the current implementation the workers stay in memory forever. This oppens possibilities for DoS attacks, which can easily be circumvented by removing workers on periodic basis.
 
