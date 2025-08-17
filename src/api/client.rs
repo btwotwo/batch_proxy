@@ -12,13 +12,6 @@ pub enum ApiClientError {
     #[error("Request failed: {0:?}")]
     Request(#[from] reqwest::Error),
 
-    #[error("Failed to deserialize JSON from response: {source}\nRaw response: {raw}")]
-    Deserialize {
-        #[source]
-        source: serde_json::Error,
-        raw: String,
-    },
-
     #[error("Other error: {0:?}")]
     Other(#[from] anyhow::Error),
 }
