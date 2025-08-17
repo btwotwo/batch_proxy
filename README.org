@@ -10,6 +10,12 @@ The proxy uses a lightweight actor model to manage shared state.
 3. *Batching logic:* The worker waits for new requests or until the configured waiting timeout (~max_waiting_timeout~) expires. If the queued inputs count exceeds the configured ~max_batch_size~, the worker flushes the batch immediately.  
 4. *Request execution:* On flushing, the worker combines the batch’s inputs and common API parameters, sends them to the target API, and distributes the resulting responses back to the corresponding clients.  
 
+*** Abstractions
+It is assumed that all requests that can be batched can be represented in the form of ~Vec<TReq>~,  and all of the responses will be in the form of ~Vec<TResp>~. That means that for the ~embed~ endpoint ~TReq=String~ and ~TRes=Vec<f64>~.
+To define a new endpoint, you will need to implement a type container trait called ~ApiEndpoint~ and define required types. In addition, you need to define ~GroupingParams~ for the common parameters that the request can be grouped on, and add the endpoint API call definition to the ~ApiClient~.
+
+You can take a look at the [[file:src/api/endpoint/embed_endpoint.rs][/embed endpoint]] for the example implementation.
+
 ** Configuration  
 The proxy is configured via ~settings.toml~. Local development overrides can be placed in ~settings.local.toml~.  
 All settings can also be overridden using environment variables, which must:  
