@@ -36,9 +36,9 @@ async fn main() -> std::io::Result<()> {
     let target_port = settings.api.target_port;
     let api_client = ReqwestApiClient::new(&settings.inference_api.target_url).unwrap();
 
-    let batch_executor = Arc::new(ApiDataProvider { api_client });
+    let data_provider = Arc::new(ApiDataProvider { api_client });
 
-    let batch_managerv2 = batch_manager::start(Arc::clone(&batch_executor), settings.batch.clone());
+    let batch_managerv2 = batch_manager::start(Arc::clone(&data_provider), settings.batch.clone());
     let batch_manager_data = web::Data::new(batch_managerv2);
 
     HttpServer::new(move || {

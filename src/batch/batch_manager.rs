@@ -11,9 +11,9 @@ use crate::{
 
 use super::{DataProvider, batch_worker::BatchWorkerHandle};
 
-struct BatchManager<TApiEndpoint: ApiEndpont, TExecutor: DataProvider<TApiEndpoint>> {
+struct BatchManager<TApiEndpoint: ApiEndpont, TDataProvider: DataProvider<TApiEndpoint>> {
     workers: HashMap<TApiEndpoint::GroupingParams, BatchWorkerHandle<TApiEndpoint>>,
-    batch_executor: Arc<TExecutor>,
+    data_provider: Arc<TDataProvider>,
     batch_config: BatchSettings,
 }
 
@@ -27,7 +27,7 @@ impl<TApiEndpoint: ApiEndpont, TExecutor: DataProvider<TApiEndpoint>>
                     let worker_id = Uuid::new_v4();
 
                     info!("Starting new worker. [parameters = {grouping_params:#?}, worker_id = {worker_id}");
-                    super::batch_worker::start(Arc::new(grouping_params.clone()), &self.batch_config, worker_id, Arc::clone(&self.batch_executor))
+                    super::batch_worker::start(Arc::new(grouping_params.clone()), &self.batch_config, worker_id, Arc::clone(&self.data_provider))
                 });
 
                 worker.put_request(req);
@@ -62,20 +62,20 @@ impl<TApiEndpoint: ApiEndpont> BatchManagerHandle<TApiEndpoint> {
         let (receiver, client) = RequestClient::new(data, client_id);
 
         self.sender
-            .send(BatchManagerMessage::NewRequest(client, grouping_params));
+            .send(BatchManagerMessage::NewRequest(client, grouping_params))?;
 
         receiver.await?
     }
 }
 
 pub fn start<TApiEndpoint: ApiEndpont>(
-    batch_executor: Arc<impl DataProvider<TApiEndpoint>>,
+    data_provider: Arc<impl DataProvider<TApiEndpoint>>,
     batch_config: BatchSettings,
 ) -> BatchManagerHandle<TApiEndpoint> {
     let (sender, mut receiver) = mpsc::unbounded_channel::<BatchManagerMessage<TApiEndpoint>>();
     let mut manager = BatchManager {
         workers: HashMap::new(),
-        batch_executor,
+        data_provider,
         batch_config,
     };
 

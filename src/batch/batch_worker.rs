@@ -16,9 +16,9 @@ enum BatchWorkerMessage<TApiEndpoint: ApiEndpont> {
     NewRequest(RequestClient<TApiEndpoint>),
 }
 
-pub struct BatchWorker<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>> {
+pub struct BatchWorker<TApiEndpoint: ApiEndpont, TDataProvider: DataProvider<TApiEndpoint>> {
     request_store: RequestStore<TApiEndpoint>,
-    batch_executor: Arc<TBatchExecutor>,
+    data_provider: Arc<TDataProvider>,
     receiver: mpsc::Receiver<BatchWorkerMessage<TApiEndpoint>>,
     worker_id: Uuid,
     grouping_params: Arc<TApiEndpoint::GroupingParams>,
@@ -72,7 +72,7 @@ impl<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>>
             self.worker_id, client_ids
         );
 
-        let executor = Arc::clone(&self.batch_executor);
+        let executor = Arc::clone(&self.data_provider);
         let grouping_params = Arc::clone(&self.grouping_params);
 
         tokio::spawn(async move {
@@ -104,22 +104,22 @@ impl<TApiEndpoint: ApiEndpont, TBatchExecutor: DataProvider<TApiEndpoint>>
     }
 }
 
-pub fn start<TApiEndpoint, TBatchExecutor>(
+pub fn start<TApiEndpoint, TDataProvider>(
     grouping_params: Arc<TApiEndpoint::GroupingParams>,
     batch_config: &BatchSettings,
     worker_id: Uuid,
-    batch_executor: Arc<TBatchExecutor>,
+    data_provider: Arc<TDataProvider>,
 ) -> BatchWorkerHandle<TApiEndpoint>
 where
     TApiEndpoint: ApiEndpont,
-    TBatchExecutor: DataProvider<TApiEndpoint>,
+    TDataProvider: DataProvider<TApiEndpoint>,
 {
     let (sender, receiver) = mpsc::channel(2048);
     let flush_wait_duration = Duration::from_millis(batch_config.max_waiting_time_ms);
 
     let worker = BatchWorker {
         request_store: RequestStore::new(batch_config.max_batch_size),
-        batch_executor,
+        data_provider,
         receiver,
         worker_id,
         grouping_params,
