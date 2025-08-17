@@ -15,7 +15,7 @@ pub struct Batch<TApiEndpoint: ApiEndpont> {
     api_parameters: TApiEndpoint::ApiRequest,
 }
 
-struct BatchedClient<TApiEndpoint: ApiEndpont> {
+pub struct BatchedClient<TApiEndpoint: ApiEndpont> {
     request_size: usize,
     request_handle: RequestHandle<TApiEndpoint::ApiResponseItem>,
 }
@@ -52,6 +52,7 @@ where
         let request_size = client.data.len();
         let request_handle = client.handle;
         inputs.extend(client.data);
+        
         clients.push(BatchedClient {
             request_size,
             request_handle,

@@ -3,7 +3,7 @@ use reqwest::Url;
 
 use crate::api::endpoint::embed_endpoint::EmbedApiRequest;
 
-use super::{ApiClient, ApiClientError, ApiClientResult};
+use super::{ApiClient, ApiClientResult};
 
 pub struct ReqwestApiClient {
     embed_url: String,
@@ -24,21 +24,15 @@ impl ReqwestApiClient {
 #[async_trait]
 impl ApiClient for ReqwestApiClient {
     async fn call_embed(&self, request: &EmbedApiRequest) -> ApiClientResult<Vec<Vec<f64>>> {
-        let result_string = self
+        let result_json = self
             .client
             .post(&self.embed_url)
             .json(&request)
             .send()
             .await?
-            .text()
+            .json()
             .await?;
 
-        match serde_json::from_str::<Vec<Vec<f64>>>(&result_string) {
-            Ok(parsed) => Ok(parsed),
-            Err(e) => Err(ApiClientError::Deserialize {
-                source: e,
-                raw: result_string,
-            }),
-        }
+        Ok(result_json)
     }
 }

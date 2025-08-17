@@ -6,4 +6,4 @@ target_url = "http://localhost:8080"
 
 [batch]
 max_batch_size = 32
-max_waiting_time_ms = 50
+max_waiting_time_ms = 8

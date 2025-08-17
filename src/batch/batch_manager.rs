@@ -41,7 +41,7 @@ enum BatchManagerMessage<TApiEndpoint: ApiEndpont> {
 }
 
 pub struct BatchManagerHandle<TApiEndpoint: ApiEndpont> {
-    sender: mpsc::Sender<BatchManagerMessage<TApiEndpoint>>,
+    sender: mpsc::UnboundedSender<BatchManagerMessage<TApiEndpoint>>,
 }
 
 impl<TApiEndpoint: ApiEndpont> BatchManagerHandle<TApiEndpoint> {
@@ -58,11 +58,11 @@ impl<TApiEndpoint: ApiEndpont> BatchManagerHandle<TApiEndpoint> {
             "Adding request from the client to batcher. [input = {:?}, params = {:?}, client_id = {:?}]",
             data, grouping_params, client_id
         );
+
         let (receiver, client) = RequestClient::new(data, client_id);
 
         self.sender
-            .send(BatchManagerMessage::NewRequest(client, grouping_params))
-            .await?;
+            .send(BatchManagerMessage::NewRequest(client, grouping_params));
 
         receiver.await?
     }
@@ -72,7 +72,7 @@ pub fn start<TApiEndpoint: ApiEndpont>(
     batch_executor: Arc<impl DataProvider<TApiEndpoint>>,
     batch_config: BatchSettings,
 ) -> BatchManagerHandle<TApiEndpoint> {
-    let (sender, mut receiver) = mpsc::channel::<BatchManagerMessage<TApiEndpoint>>(2048);
+    let (sender, mut receiver) = mpsc::unbounded_channel::<BatchManagerMessage<TApiEndpoint>>();
     let mut manager = BatchManager {
         workers: HashMap::new(),
         batch_executor,
